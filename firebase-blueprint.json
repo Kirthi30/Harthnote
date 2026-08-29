@@ -1,0 +1,230 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "User account settings, streak metadata, and privacy configurations.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "The unique Firebase Authentication UID."
+        },
+        "displayName": {
+          "type": "string",
+          "description": "The user's preferred name or pseudonym."
+        },
+        "email": {
+          "type": "string",
+          "description": "The user's Google account email."
+        },
+        "aiMemoryLevel": {
+          "type": "string",
+          "enum": ["none", "light", "deep"],
+          "description": "User's chosen AI memory depth level for reflections."
+        },
+        "pinEnabled": {
+          "type": "boolean",
+          "description": "Whether local app PIN lock is enabled."
+        },
+        "pinHash": {
+          "type": "string",
+          "description": "Hashed 4-digit PIN code for local unlock."
+        },
+        "reminderTime": {
+          "type": "string",
+          "description": "Daily journaling reminder time (HH:MM format)."
+        },
+        "streakCount": {
+          "type": "number",
+          "description": "Consecutive days with journal check-ins."
+        },
+        "lastJournalDate": {
+          "type": "string",
+          "description": "ISO date string of most recent journal entry or mood check-in."
+        },
+        "createdAt": {
+          "type": "number",
+          "description": "Timestamp of account initialization."
+        }
+      },
+      "required": ["id", "aiMemoryLevel", "createdAt"]
+    },
+    "JournalEntry": {
+      "title": "Journal Entry",
+      "description": "A private, distraction-free notebook entry with optional template answers and mood.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique entry identifier."
+        },
+        "userId": {
+          "type": "string",
+          "description": "UID of the author owning this entry."
+        },
+        "templateType": {
+          "type": "string",
+          "enum": ["gratitude", "reflection", "goals", "freewrite", "clarity"],
+          "description": "The template category used for this entry."
+        },
+        "templateTitle": {
+          "type": "string",
+          "description": "Display title of the chosen template."
+        },
+        "title": {
+          "type": "string",
+          "description": "Optional title for the journal entry."
+        },
+        "text": {
+          "type": "string",
+          "description": "Full text body of the journal entry."
+        },
+        "promptAnswers": {
+          "type": "object",
+          "description": "Structured answers to template guiding questions."
+        },
+        "mood": {
+          "type": "string",
+          "enum": ["radiant", "calm", "reflective", "tender", "weary"],
+          "description": "Mood associated with this entry."
+        },
+        "moodLabel": {
+          "type": "string",
+          "description": "Human-readable label for the mood."
+        },
+        "wordCount": {
+          "type": "number",
+          "description": "Word count of the entry."
+        },
+        "aiReflection": {
+          "type": "string",
+          "description": "Short, gentle 1-2 sentence reflection note generated post-save."
+        },
+        "aiReflectionDismissed": {
+          "type": "boolean",
+          "description": "Whether user dismissed the gentle reflection note."
+        },
+        "createdAt": {
+          "type": "number",
+          "description": "Creation timestamp in milliseconds."
+        },
+        "updatedAt": {
+          "type": "number",
+          "description": "Last modified timestamp in milliseconds."
+        }
+      },
+      "required": ["id", "userId", "templateType", "text", "createdAt", "updatedAt"]
+    },
+    "MoodLog": {
+      "title": "Mood Log",
+      "description": "Quick daily mood check-in dot for habit and emotional tracking.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique mood log entry ID."
+        },
+        "userId": {
+          "type": "string",
+          "description": "UID of user who logged mood."
+        },
+        "date": {
+          "type": "string",
+          "description": "ISO date string (YYYY-MM-DD)."
+        },
+        "mood": {
+          "type": "string",
+          "enum": ["radiant", "calm", "reflective", "tender", "weary"],
+          "description": "Selected mood identifier."
+        },
+        "moodLabel": {
+          "type": "string",
+          "description": "Readable mood label."
+        },
+        "note": {
+          "type": "string",
+          "description": "Optional short note accompanying mood check-in."
+        },
+        "createdAt": {
+          "type": "number",
+          "description": "Timestamp of check-in."
+        }
+      },
+      "required": ["id", "userId", "date", "mood", "createdAt"]
+    },
+    "WeeklyReflection": {
+      "title": "Weekly Reflection Summary",
+      "description": "Aggregated weekly reflection card with emotional curve and gentle open inquiries.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique reflection summary ID."
+        },
+        "userId": {
+          "type": "string",
+          "description": "UID of the user."
+        },
+        "weekStartDate": {
+          "type": "string",
+          "description": "Start date of the analyzed week."
+        },
+        "weekEndDate": {
+          "type": "string",
+          "description": "End date of the analyzed week."
+        },
+        "moodTrendSummary": {
+          "type": "string",
+          "description": "Gentle 1-2 sentence synthesis of mood patterns."
+        },
+        "themes": {
+          "type": "array",
+          "description": "2-3 recurring themes noticed across the week."
+        },
+        "reflectionQuestions": {
+          "type": "array",
+          "description": "2-3 gentle, open reflection questions."
+        },
+        "inquiryAnswers": {
+          "type": "object",
+          "description": "User's personal thoughts and answers responding to gentle inquiry questions."
+        },
+        "userNotes": {
+          "type": "string",
+          "description": "Optional open notes written by user on the weekly mirror."
+        },
+        "entriesCount": {
+          "type": "number",
+          "description": "Number of journal entries included in synthesis."
+        },
+        "createdAt": {
+          "type": "number",
+          "description": "Generation timestamp in milliseconds."
+        },
+        "savedAt": {
+          "type": "number",
+          "description": "Timestamp when reflection thoughts were saved or modified."
+        }
+      },
+      "required": ["id", "userId", "weekStartDate", "moodTrendSummary", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "#/entities/User",
+      "description": "User profile settings, AI memory depth, and lock configurations."
+    },
+    "/users/{userId}/entries/{entryId}": {
+      "schema": "#/entities/JournalEntry",
+      "description": "Private notebook entries belonging to the authenticated user."
+    },
+    "/users/{userId}/moodLogs/{moodLogId}": {
+      "schema": "#/entities/MoodLog",
+      "description": "Daily mood check-ins for the user's dot trail."
+    },
+    "/users/{userId}/weeklyReflections/{reflectionId}": {
+      "schema": "#/entities/WeeklyReflection",
+      "description": "AI-generated weekly reflection mirror cards."
+    }
+  }
+}
