@@ -13,7 +13,11 @@ import {
   deleteWeeklyReflection,
   subscribeToWeeklyReflections, 
   saveUserProfile, 
-  subscribeToUserProfile 
+  subscribeToUserProfile,
+  deleteUserData,
+  saveReflectionChatSession,
+  deleteReflectionChatSession,
+  subscribeToReflectionChatSessions
 } from './firebase';
 import type { 
   AppView, 
@@ -23,9 +27,11 @@ import type {
   TemplateType, 
   UserProfile, 
   WeeklyReflection,
-  AIMemoryLevel 
+  AIMemoryLevel,
+  ReflectionChatSession
 } from './types';
 import { SAMPLE_ENTRIES, SAMPLE_WEEKLY_REFLECTION, MOODS } from './data/templates';
+import hearthnoteLogo from './assets/images/app_logo.png';
 
 // Components
 import { Navigation } from './components/Navigation';
@@ -158,7 +164,39 @@ const getDemoSampleData = () => {
     },
   ];
 
-  return { demoEntries, demoMoods, todayIso };
+  const demoChatSessions: ReflectionChatSession[] = [
+    {
+      id: 'demo-chat-session-1',
+      userId: 'guest-user',
+      title: 'Quiet Morning Reflections',
+      firstQuestion: 'What unexpected source of calm or lightness found its way into your week?',
+      messageCount: 3,
+      messages: [
+        {
+          id: 'demo-msg-1',
+          sender: 'ai',
+          text: 'What unexpected source of calm or lightness found its way into your week? Looking across your recent entries, moments of quiet pause seemed to restore your energy.',
+          timestamp: todayTime - dayMs * 2,
+        },
+        {
+          id: 'demo-msg-2',
+          sender: 'user',
+          text: 'Sitting quietly with warm ginger tea before the morning bustle started. Watching the early light slant across the table without any urgent demands.',
+          timestamp: todayTime - dayMs * 2 + 120000,
+        },
+        {
+          id: 'demo-msg-3',
+          sender: 'ai',
+          text: 'That sounds profoundly grounding. How might you gently preserve a small pocket of that stillness as the upcoming week begins?',
+          timestamp: todayTime - dayMs * 2 + 240000,
+        },
+      ],
+      createdAt: todayTime - dayMs * 2,
+      completedAt: todayTime - dayMs * 2 + 300000,
+    },
+  ];
+
+  return { demoEntries, demoMoods, demoChatSessions, todayIso };
 };
 
 export const App: React.FC = () => {
@@ -178,6 +216,7 @@ export const App: React.FC = () => {
   const [entries, setEntries] = useState<JournalEntry[]>([]);
   const [moodLogs, setMoodLogs] = useState<MoodLog[]>([]);
   const [weeklyReflections, setWeeklyReflections] = useState<WeeklyReflection[]>([]);
+  const [reflectionChatSessions, setReflectionChatSessions] = useState<ReflectionChatSession[]>([]);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
 
   // Modals & Locks
@@ -217,10 +256,11 @@ export const App: React.FC = () => {
     if (!user || isGuestMode) {
       if (isGuestMode && entries.length === 0) {
         // Populate guest mode with sample demo data
-        const { demoEntries, demoMoods, todayIso } = getDemoSampleData();
+        const { demoEntries, demoMoods, demoChatSessions, todayIso } = getDemoSampleData();
         setEntries(demoEntries);
         setWeeklyReflections([SAMPLE_WEEKLY_REFLECTION]);
         setMoodLogs(demoMoods);
+        setReflectionChatSessions(demoChatSessions);
         setUserProfile({
           id: 'guest',
           displayName: 'Guest Writer',
@@ -267,11 +307,18 @@ export const App: React.FC = () => {
       console.warn('Weekly reflection error:', err);
     });
 
+    const unsubChats = subscribeToReflectionChatSessions(user.uid, (data) => {
+      setReflectionChatSessions(data);
+    }, (err) => {
+      console.warn('Reflection chats error:', err);
+    });
+
     return () => {
       unsubProfile();
       unsubEntries();
       unsubMoods();
       unsubWeekly();
+      unsubChats();
     };
   }, [user, isGuestMode]);
 
@@ -296,10 +343,11 @@ export const App: React.FC = () => {
       displayName: 'Eleanor Vance',
       email: 'eleanor@example.com',
     });
-    const { demoEntries, demoMoods, todayIso } = getDemoSampleData();
+    const { demoEntries, demoMoods, demoChatSessions, todayIso } = getDemoSampleData();
     setEntries(demoEntries);
     setWeeklyReflections([SAMPLE_WEEKLY_REFLECTION]);
     setMoodLogs(demoMoods);
+    setReflectionChatSessions(demoChatSessions);
     setUserProfile({
       id: 'guest-user',
       displayName: 'Eleanor Vance',
@@ -608,6 +656,41 @@ export const App: React.FC = () => {
     }
   };
 
+  // Save / Update a Reflection Chat Session
+  const handleSaveChatSession = async (session: ReflectionChatSession) => {
+    if (!isGuestMode && user) {
+      try {
+        await saveReflectionChatSession(user.uid, session);
+      } catch (err) {
+        console.error('Failed to save reflection chat session to Firestore:', err);
+        // Fallback to local state if Firestore write encounters an issue
+        setReflectionChatSessions((prev) => [
+          session,
+          ...prev.filter((s) => s.id !== session.id),
+        ]);
+      }
+    } else {
+      setReflectionChatSessions((prev) => [
+        session,
+        ...prev.filter((s) => s.id !== session.id),
+      ]);
+    }
+  };
+
+  // Delete a Reflection Chat Session
+  const handleDeleteChatSession = async (sessionId: string) => {
+    if (!isGuestMode && user) {
+      try {
+        await deleteReflectionChatSession(user.uid, sessionId);
+      } catch (err) {
+        console.error('Failed to delete reflection chat session from Firestore:', err);
+        setReflectionChatSessions((prev) => prev.filter((s) => s.id !== sessionId));
+      }
+    } else {
+      setReflectionChatSessions((prev) => prev.filter((s) => s.id !== sessionId));
+    }
+  };
+
   // Settings Handlers
   const handleUpdateMemoryLevel = async (level: AIMemoryLevel) => {
     if (userProfile && user && !isGuestMode) {
@@ -670,6 +753,25 @@ export const App: React.FC = () => {
     }
   };
 
+  const handleDeactivateAccount = async () => {
+    await logoutUser();
+    setUser(null);
+    setIsGuestMode(false);
+    setEntries([]);
+    setCurrentView('home');
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!isGuestMode && user) {
+      await deleteUserData(user.uid);
+    }
+    await logoutUser();
+    setUser(null);
+    setIsGuestMode(false);
+    setEntries([]);
+    setCurrentView('home');
+  };
+
   // Today's logged mood
   const todayIso = new Date().toISOString().split('T')[0];
   const todayMoodLog = moodLogs.find((m) => m.date === todayIso);
@@ -680,8 +782,13 @@ export const App: React.FC = () => {
     return (
       <div className="min-h-screen bg-[#FAF6EE] flex items-center justify-center text-[#4A3F39]">
         <div className="flex flex-col items-center space-y-3">
-          <div className="w-10 h-10 rounded-2xl bg-[#C97C4C] text-[#FFFDF9] flex items-center justify-center animate-pulse">
-            <span className="font-display font-bold text-xl">H</span>
+          <div className="w-14 h-14 rounded-2xl border border-[#E8DFC8] bg-[#FFFDF9] shadow-sm flex items-center justify-center overflow-hidden flex-shrink-0 animate-pulse">
+            <img 
+              src={hearthnoteLogo} 
+              alt="Hearthnote Logo" 
+              className="w-full h-full object-cover scale-[1.75]"
+              referrerPolicy="no-referrer"
+            />
           </div>
           <p className="text-xs font-serif text-[#7C7067]">Opening your quiet space...</p>
         </div>
@@ -694,7 +801,6 @@ export const App: React.FC = () => {
       <>
         <LandingScreen
           onSignIn={handleSignIn}
-          onExploreDemo={handleExploreDemo}
           isLoading={authLoading}
           onOpenPrivacy={() => setShowPrivacy(true)}
         />
@@ -803,6 +909,7 @@ export const App: React.FC = () => {
               setEditingEntry(null);
               setCurrentView('write');
             }}
+            onOpenExport={() => setCurrentView('settings')}
           />
         )}
 
@@ -811,11 +918,15 @@ export const App: React.FC = () => {
             entries={entries}
             moodLogs={moodLogs}
             weeklyReflections={weeklyReflections}
+            reflectionChatSessions={reflectionChatSessions}
             onGenerateWeeklyReflection={handleGenerateWeeklyReflection}
             onSaveWeeklyReflection={handleSaveWeeklyReflection}
             onDeleteWeeklyReflection={handleDeleteWeeklyReflection}
+            onSaveChatSession={handleSaveChatSession}
+            onDeleteChatSession={handleDeleteChatSession}
             isGeneratingReflection={isGeneratingWeekly}
             streakCount={effectiveStreakCount}
+            userId={user?.uid}
           />
         )}
 
@@ -823,11 +934,14 @@ export const App: React.FC = () => {
           <SettingsScreen
             user={user}
             userProfile={userProfile}
+            entries={entries}
             onUpdateMemoryLevel={handleUpdateMemoryLevel}
             onUpdatePin={handleUpdatePin}
             onUpdateReminder={handleUpdateReminder}
             onOpenPrivacy={() => setShowPrivacy(true)}
             onSignOut={handleSignOut}
+            onDeactivateAccount={handleDeactivateAccount}
+            onDeleteAccount={handleDeleteAccount}
           />
         )}
       </div>

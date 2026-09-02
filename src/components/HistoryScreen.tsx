@@ -10,7 +10,8 @@ import {
   ChevronLeft, 
   ChevronRight, 
   PenTool,
-  Smile
+  Smile,
+  Download
 } from 'lucide-react';
 import type { JournalEntry, MoodType, TemplateType } from '../types';
 import { JOURNAL_TEMPLATES, MOODS } from '../data/templates';
@@ -19,12 +20,14 @@ interface HistoryScreenProps {
   entries: JournalEntry[];
   onSelectEntry: (entry: JournalEntry) => void;
   onNewEntry: () => void;
+  onOpenExport?: () => void;
 }
 
 export const HistoryScreen: React.FC<HistoryScreenProps> = ({
   entries,
   onSelectEntry,
   onNewEntry,
+  onOpenExport,
 }) => {
   const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
   const [searchQuery, setSearchQuery] = useState('');
@@ -128,6 +131,16 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({
               <span>Calendar</span>
             </button>
           </div>
+
+          {onOpenExport && (
+            <button
+              onClick={onOpenExport}
+              className="px-3.5 py-2 rounded-xl bg-[#FAF0E8] hover:bg-[#F4E3D5] text-[#C97C4C] font-semibold text-xs transition-colors flex items-center space-x-1.5"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Export Journal</span>
+            </button>
+          )}
 
           <button
             onClick={onNewEntry}

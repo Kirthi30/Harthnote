@@ -207,6 +207,58 @@
         }
       },
       "required": ["id", "userId", "weekStartDate", "moodTrendSummary", "createdAt"]
+    },
+    "ReflectionChatSession": {
+      "title": "Saved Reflection Chat Session",
+      "description": "Completed conversation with the AI Reflection Companion, stored as a dedicated dialogue record.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique chat session ID."
+        },
+        "userId": {
+          "type": "string",
+          "description": "UID of the user who engaged in the conversation."
+        },
+        "title": {
+          "type": "string",
+          "description": "Summary or title of the reflection chat session."
+        },
+        "weeklyReflectionId": {
+          "type": "string",
+          "description": "Optional associated weekly reflection ID."
+        },
+        "weeklyReflectionDate": {
+          "type": "string",
+          "description": "Date range string of the weekly reflection."
+        },
+        "firstQuestion": {
+          "type": "string",
+          "description": "The initial reflection inquiry that kicked off the dialogue."
+        },
+        "messages": {
+          "type": "array",
+          "description": "List of user and AI messages exchanged in the session."
+        },
+        "messageCount": {
+          "type": "number",
+          "description": "Total count of messages in the dialogue."
+        },
+        "summary": {
+          "type": "string",
+          "description": "Optional short summary or key takeaway from the dialogue."
+        },
+        "createdAt": {
+          "type": "number",
+          "description": "Session creation timestamp."
+        },
+        "completedAt": {
+          "type": "number",
+          "description": "Timestamp when the conversation was completed and saved."
+        }
+      },
+      "required": ["id", "userId", "title", "firstQuestion", "messages", "messageCount", "createdAt", "completedAt"]
     }
   },
   "firestore": {
@@ -225,6 +277,10 @@
     "/users/{userId}/weeklyReflections/{reflectionId}": {
       "schema": "#/entities/WeeklyReflection",
       "description": "AI-generated weekly reflection mirror cards."
+    },
+    "/users/{userId}/reflectionChats/{chatId}": {
+      "schema": "#/entities/ReflectionChatSession",
+      "description": "Saved completed conversations with the AI Reflection Companion."
     }
   }
 }

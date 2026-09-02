@@ -21,7 +21,7 @@ import {
   onSnapshot,
   Firestore
 } from 'firebase/firestore';
-import type { JournalEntry, MoodLog, UserProfile, WeeklyReflection } from './types';
+import type { JournalEntry, MoodLog, UserProfile, WeeklyReflection, ReflectionChatSession } from './types';
 import firebaseConfig from '../firebase-applet-config.json';
 
 // Initialize Firebase App instance safely
@@ -201,7 +201,98 @@ export const subscribeToWeeklyReflections = (
   );
 };
 
-// User Profile Operations: /users/{userId}
+// Reflection Chat Sessions Operations: /users/{userId}/reflectionChats/{chatId}
+export const getReflectionChatsCollectionRef = (userId: string) => {
+  return collection(db, 'users', userId, 'reflectionChats');
+};
+
+export const saveReflectionChatSession = async (
+  userId: string, 
+  session: ReflectionChatSession
+): Promise<void> => {
+  if (!userId) throw new Error('User ID is required to persist reflection chat session.');
+  const ref = doc(db, 'users', userId, 'reflectionChats', session.id);
+  const clean = sanitizeForFirestore({
+    ...session,
+    userId,
+    completedAt: session.completedAt || Date.now(),
+  });
+  await setDoc(ref, clean, { merge: true });
+};
+
+export const deleteReflectionChatSession = async (
+  userId: string, 
+  sessionId: string
+): Promise<void> => {
+  if (!userId || !sessionId) return;
+  const ref = doc(db, 'users', userId, 'reflectionChats', sessionId);
+  await deleteDoc(ref);
+};
+
+export const subscribeToReflectionChatSessions = (
+  userId: string,
+  onUpdate: (sessions: ReflectionChatSession[]) => void,
+  onError?: (err: Error) => void
+) => {
+  if (!userId) {
+    onUpdate([]);
+    return () => {};
+  }
+  const q = query(
+    getReflectionChatsCollectionRef(userId), 
+    orderBy('completedAt', 'desc'), 
+    limit(25)
+  );
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const list = snapshot.docs.map((d) => d.data() as ReflectionChatSession);
+      onUpdate(list);
+    },
+    (error) => {
+      console.error('Firestore reflection chats error:', error);
+      if (onError) onError(error);
+    }
+  );
+};
+
+// Permanently wipe all user data from Firestore
+export const deleteUserData = async (userId: string): Promise<void> => {
+  if (!userId) return;
+  
+  try {
+    // Delete all entries
+    const entriesSnap = await getDocs(getEntriesCollectionRef(userId));
+    for (const d of entriesSnap.docs) {
+      await deleteDoc(doc(db, 'users', userId, 'entries', d.id));
+    }
+
+    // Delete all mood logs
+    const moodSnap = await getDocs(getMoodLogsCollectionRef(userId));
+    for (const d of moodSnap.docs) {
+      await deleteDoc(doc(db, 'users', userId, 'moodLogs', d.id));
+    }
+
+    // Delete all weekly reflections
+    const refSnap = await getDocs(collection(db, 'users', userId, 'weeklyReflections'));
+    for (const d of refSnap.docs) {
+      await deleteDoc(doc(db, 'users', userId, 'weeklyReflections', d.id));
+    }
+
+    // Delete all reflection chat sessions
+    const chatsSnap = await getDocs(getReflectionChatsCollectionRef(userId));
+    for (const d of chatsSnap.docs) {
+      await deleteDoc(doc(db, 'users', userId, 'reflectionChats', d.id));
+    }
+
+    // Delete user profile document
+    await deleteDoc(doc(db, 'users', userId));
+  } catch (err) {
+    console.error('Error wiping user data:', err);
+    throw err;
+  }
+};
+
 export const saveUserProfile = async (userId: string, profile: Partial<UserProfile>): Promise<void> => {
   if (!userId) return;
   const ref = doc(db, 'users', userId);

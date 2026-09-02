@@ -250,7 +250,140 @@ ${formattedEntries}`;
     }
   });
 
-  // 4. Vite Middleware integration
+  // 4. Content-Based Inspired Quote Generation API
+  app.post('/api/gemini/generate-quote', async (req: Request, res: Response) => {
+    try {
+      const data = (req.body && typeof req.body === 'object') ? req.body : {};
+      const entryText = typeof data.entryText === 'string' ? data.entryText.trim() : '';
+      const mood = typeof data.mood === 'string' ? data.mood : 'calm';
+      const promptAnswers = typeof data.promptAnswers === 'object' && data.promptAnswers !== null ? data.promptAnswers : {};
+
+      const combinedContent = `${entryText}\n${Object.values(promptAnswers).join('\n')}`.trim();
+
+      if (!combinedContent) {
+        res.json({
+          quote: "In the quiet depth of a simple page, your mind finds its natural sanctuary.",
+          author: "Hearthnote Reflection",
+          modelUsed: "default",
+        });
+        return;
+      }
+
+      const systemInstruction = `You are a thoughtful literary quote assistant inside Hearthnote, a private reflective journal app.
+Given a user's journal entry content and mood, generate a unique, deeply moving, elegant 1-sentence quote or philosophical observation that directly mirrors, grounds, or elevates the user's written thoughts.
+
+Rules:
+1. Exactly 1 inspiring sentence.
+2. Poetic, warm, comforting, and grounded in the specific emotion/theme written.
+3. Return ONLY valid JSON matching:
+{
+  "quote": string,
+  "author": string
+}`;
+
+      const userPrompt = `User's Mood: ${mood}
+User's Writing:
+${combinedContent}`;
+
+      const result = await generateContentWithFallback({
+        contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+        systemInstruction,
+        responseMimeType: 'application/json',
+        temperature: 0.7,
+      });
+
+      let parsed: any;
+      try {
+        parsed = JSON.parse(result.text);
+      } catch {
+        const clean = result.text.replace(/```json/g, '').replace(/```/g, '').trim();
+        parsed = JSON.parse(clean);
+      }
+
+      res.json({
+        quote: parsed.quote || "To write your truth down is to grant your mind room to rest.",
+        author: parsed.author || "Quiet Mirror",
+        modelUsed: result.modelUsed,
+      });
+    } catch (error: any) {
+      console.error('Error generating inspired quote:', error);
+      res.json({
+        quote: "Between the lines of what you write, peace softly settles.",
+        author: "Hearthnote Companion",
+        modelUsed: "fallback",
+      });
+    }
+  });
+
+  // 5. Interactive Reflection Companion Chat API
+  app.post('/api/gemini/chat', async (req: Request, res: Response) => {
+    try {
+      const data = (req.body && typeof req.body === 'object') ? req.body : {};
+      const userMessage = typeof data.message === 'string' ? data.message.trim() : '';
+      const history = Array.isArray(data.history) ? data.history : [];
+      const reflectionQuestion = typeof data.reflectionQuestion === 'string' ? data.reflectionQuestion : '';
+      const reflectionSummary = typeof data.reflectionSummary === 'string' ? data.reflectionSummary : '';
+      const themes = Array.isArray(data.themes) ? data.themes.join(', ') : '';
+
+      if (!userMessage) {
+        res.status(400).json({ error: 'Message content is required.' });
+        return;
+      }
+
+      // Format previous conversation turns safely
+      const formattedHistory = history
+        .slice(-8) // Keep context window focused
+        .map((m: any) => `${m.sender === 'user' ? 'User' : 'Reflection Companion'}: ${m.text || ''}`)
+        .join('\n\n');
+
+      const systemInstruction = `You are Hearthnote's gentle Reflection Companion.
+You are engaged in an intimate, quiet conversation with the writer about their weekly reflection mirror.
+Weekly Reflection Context:
+- Central Question Discussed: "${reflectionQuestion || 'What brought you a feeling of ease recently?'}"
+- Emotional Arc Summary: "${reflectionSummary || 'Moments of quiet observation and grounding'}"
+- Recurring Themes: ${themes || 'Mindfulness, patience, gentle pauses'}
+
+Your Core Purpose:
+1. Provide a calm, deeply thoughtful, warm sounding board for the user's reflections.
+2. Length: Keep your reply concise (2 to 4 gentle sentences). Never write lengthy sermons or lecture the user.
+3. Tone: Empathetic, poetic yet simple, non-judgmental, grounded.
+4. Boundaries: You are NOT a therapist, doctor, or advisor. Never give clinical advice, diagnose conditions, or prescribe life solutions. Use mirroring and open inquiry ("How does that space feel when you step into it?", "What would it look like to honor that need today?").
+5. Safety: If self-harm or crisis is mentioned, gently remind them that they deserve support and offer the 988 Suicide & Crisis Lifeline.`;
+
+      const prompt = `${formattedHistory ? `Prior Conversation:\n${formattedHistory}\n\n` : ''}User's New Thought:
+${userMessage}`;
+
+      const result = await generateContentWithFallback({
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        systemInstruction,
+        temperature: 0.6,
+      });
+
+      res.json({
+        reply: result.text.trim(),
+        modelUsed: result.modelUsed,
+        timestamp: Date.now(),
+      });
+    } catch (error: any) {
+      console.error('Error in /api/gemini/chat:', error);
+      // Graceful empathetic fallback so user reflection is never interrupted
+      const fallbackReplies = [
+        "Thank you for sharing that with me. It takes genuine quiet honesty to name those feelings and give them a place to simply be.",
+        "There is a lot of wisdom in listening to what your day was trying to tell you. What part of that feels most important for you to hold gently right now?",
+        "When you notice that shift in yourself, it creates space for breathing. How does your body feel as you give voice to this thought?",
+        "I hear you. Sometimes the clearest insights come not from solving everything, but simply sitting by the hearth with what is true today."
+      ];
+      const randomFallback = fallbackReplies[Math.floor(Math.random() * fallbackReplies.length)];
+
+      res.json({
+        reply: randomFallback,
+        modelUsed: 'graceful-fallback',
+        timestamp: Date.now(),
+      });
+    }
+  });
+
+  // 6. Vite Middleware integration
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
       server: { middlewareMode: true },

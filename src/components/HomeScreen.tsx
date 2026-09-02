@@ -102,10 +102,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           </p>
         </div>
 
-        {/* 7-Day Subtle Dot Trail */}
+        {/* 7-Day Subtle Dot Rhythm */}
         <div className="bg-[#FFFDF9] border border-[#E8DFC8] rounded-2xl p-3.5 shadow-xs flex items-center space-x-3 self-start md:self-auto">
           <div className="flex flex-col">
-            <span className="text-[10px] font-semibold text-[#8C8075] uppercase tracking-wider">7-Day Trail</span>
+            <span className="text-[10px] font-semibold text-[#8C8075] uppercase tracking-wider">7-Day Rhythm</span>
             <span className="text-xs font-bold text-[#2B231F] flex items-center space-x-1">
               <Flame className="w-3.5 h-3.5 text-[#C97C4C] fill-[#C97C4C]/20" />
               <span>{streakCount} {streakCount === 1 ? 'day' : 'days'} streak</span>
@@ -159,16 +159,31 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           )}
         </div>
 
-        {/* 5 Gentle Mood Buttons */}
+        {/* Comprehensive Emotional Mood Buttons */}
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
           {(Object.keys(MOODS) as MoodType[]).map((moodKey) => {
             const mood = MOODS[moodKey];
             const isSelected = todayMood === moodKey;
+            const getMoodSubtitle = (type: MoodType) => {
+              switch (type) {
+                case 'radiant': return 'Bright & Joyful';
+                case 'calm': return 'Peaceful & Steady';
+                case 'hopeful': return 'Optimistic & Inspired';
+                case 'reflective': return 'Contemplative';
+                case 'tender': return 'Soft & Sensitive';
+                case 'anxious': return 'Uneasy & Restless';
+                case 'sad': return 'Down & Heavy';
+                case 'angry': return 'Frustrated & Fiery';
+                case 'overwhelmed': return 'Flooded & Pressured';
+                case 'weary': return 'Tired & Exhausted';
+                default: return '';
+              }
+            };
             return (
               <button
                 key={moodKey}
                 onClick={() => handleMoodClick(moodKey)}
-                className={`flex flex-col items-center p-3.5 rounded-2xl border transition-all cursor-pointer text-center group ${
+                className={`flex flex-col items-center p-3 rounded-2xl border transition-all cursor-pointer text-center group ${
                   isSelected
                     ? 'border-[#C97C4C] bg-[#FAF0E8] shadow-xs ring-1 ring-[#C97C4C]'
                     : 'border-[#EAE1CF] bg-[#FFFDF9] hover:bg-[#F9F5EC] hover:border-[#D6C7AE]'
@@ -181,7 +196,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                   {mood.label}
                 </span>
                 <span className="text-[10px] text-[#8C8075] mt-0.5 line-clamp-1">
-                  {mood.type === 'radiant' ? 'Bright & Joyful' : mood.type === 'calm' ? 'Peaceful & Steady' : mood.type === 'reflective' ? 'Thoughtful' : mood.type === 'tender' ? 'Soft & Sensitive' : 'Tired & Heavy'}
+                  {getMoodSubtitle(mood.type)}
                 </span>
               </button>
             );
@@ -217,8 +232,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           </button>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {JOURNAL_TEMPLATES.map((tmpl) => {
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-4">
+          {JOURNAL_TEMPLATES.filter((tmpl) => tmpl.id !== 'freewrite').map((tmpl) => {
             const Icon = getTemplateIcon(tmpl.iconName);
             return (
               <div

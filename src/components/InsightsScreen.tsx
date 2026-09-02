@@ -12,37 +12,58 @@ import {
   ChevronUp, 
   Trash2,
   BookmarkCheck,
-  Edit3
+  Edit3,
+  Maximize2,
+  Clock,
+  HelpCircle,
+  Plus
 } from 'lucide-react';
-import type { JournalEntry, MoodLog, MoodType, WeeklyReflection } from '../types';
+import type { JournalEntry, MoodLog, MoodType, WeeklyReflection, ReflectionChatSession } from '../types';
 import { MOODS, JOURNAL_TEMPLATES } from '../data/templates';
+import { ReflectionChatModal } from './ReflectionChatModal';
+import { WeeklyReflectionModal } from './WeeklyReflectionModal';
+import { SavedDialogueDetailModal } from './SavedDialogueDetailModal';
 
 interface InsightsScreenProps {
   entries: JournalEntry[];
   moodLogs: MoodLog[];
   weeklyReflections: WeeklyReflection[];
+  reflectionChatSessions?: ReflectionChatSession[];
   onGenerateWeeklyReflection: () => Promise<void>;
   onSaveWeeklyReflection: (reflection: WeeklyReflection) => Promise<void>;
   onDeleteWeeklyReflection?: (reflectionId: string) => Promise<void>;
+  onSaveChatSession?: (session: ReflectionChatSession) => Promise<void>;
+  onDeleteChatSession?: (sessionId: string) => Promise<void>;
   isGeneratingReflection: boolean;
   streakCount: number;
-  initialTab?: 'mirror' | 'history';
-  onTabChange?: (tab: 'mirror' | 'history') => void;
+  initialTab?: 'mirror' | 'history' | 'dialogues';
+  onTabChange?: (tab: 'mirror' | 'history' | 'dialogues') => void;
+  userId?: string;
 }
 
 export const InsightsScreen: React.FC<InsightsScreenProps> = ({
   entries,
   moodLogs,
   weeklyReflections,
+  reflectionChatSessions = [],
   onGenerateWeeklyReflection,
   onSaveWeeklyReflection,
   onDeleteWeeklyReflection,
+  onSaveChatSession,
+  onDeleteChatSession,
   isGeneratingReflection,
   streakCount,
   initialTab = 'mirror',
   onTabChange,
+  userId,
 }) => {
-  const [activeTab, setActiveTab] = useState<'mirror' | 'history'>(initialTab);
+  const [activeTab, setActiveTab] = useState<'mirror' | 'history' | 'dialogues'>(initialTab);
+
+  // Modal states for pop-ups
+  const [showChatModal, setShowChatModal] = useState(false);
+  const [showWeeklyModal, setShowWeeklyModal] = useState(false);
+  const [weeklyModalReflection, setWeeklyModalReflection] = useState<WeeklyReflection | null>(null);
+  const [selectedDialogueSession, setSelectedDialogueSession] = useState<ReflectionChatSession | null>(null);
 
   // Sync tab with initialTab prop if it changes
   useEffect(() => {
@@ -51,7 +72,7 @@ export const InsightsScreen: React.FC<InsightsScreenProps> = ({
     }
   }, [initialTab]);
 
-  const handleTabSwitch = (tab: 'mirror' | 'history') => {
+  const handleTabSwitch = (tab: 'mirror' | 'history' | 'dialogues') => {
     setActiveTab(tab);
     if (onTabChange) onTabChange(tab);
   };
@@ -211,19 +232,51 @@ export const InsightsScreen: React.FC<InsightsScreenProps> = ({
                 </span>
               )}
             </button>
+
+            <button
+              id="tab-dialogues-btn"
+              onClick={() => handleTabSwitch('dialogues')}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center space-x-1.5 ${
+                activeTab === 'dialogues'
+                  ? 'bg-[#FFFDF9] text-[#2B231F] shadow-xs'
+                  : 'text-[#7C7067] hover:text-[#2B231F]'
+              }`}
+            >
+              <MessageSquare className="w-3.5 h-3.5 text-[#C97C4C]" />
+              <span>Saved Dialogues</span>
+              {reflectionChatSessions.length > 0 && (
+                <span className="ml-1 px-1.5 py-0.2 rounded-full bg-[#FAF0E8] border border-[#EAD6C7] text-[#8C5230] text-[10px] font-bold">
+                  {reflectionChatSessions.length}
+                </span>
+              )}
+            </button>
           </div>
 
-          {activeTab === 'mirror' && (
+          <div className="flex items-center space-x-2">
+            {/* Pop-up Chatbot Trigger */}
             <button
-              id="generate-weekly-btn"
-              onClick={onGenerateWeeklyReflection}
-              disabled={isGeneratingReflection || entries.length === 0}
-              className="px-4 py-2 rounded-xl bg-[#C97C4C] hover:bg-[#B46A3B] text-[#FFFDF9] font-medium text-xs shadow-xs transition-all flex items-center space-x-1.5 disabled:opacity-50 active:scale-[0.98]"
+              id="open-ai-chat-header-btn"
+              onClick={() => setShowChatModal(true)}
+              className="px-3.5 py-2 rounded-xl bg-[#FAF0E8] hover:bg-[#F3E2D3] border border-[#EAD6C7] text-[#8C5230] font-semibold text-xs shadow-2xs transition-all flex items-center space-x-1.5 active:scale-95"
+              title="Open AI Reflection Companion Pop-up"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${isGeneratingReflection ? 'animate-spin' : ''}`} />
-              <span>{isGeneratingReflection ? 'Synthesizing...' : 'Refresh Mirror'}</span>
+              <Sparkles className="w-3.5 h-3.5 text-[#C97C4C]" />
+              <span className="hidden sm:inline">Chat with AI Mirror</span>
+              <span className="sm:hidden">AI Chat</span>
             </button>
-          )}
+
+            {activeTab === 'mirror' && (
+              <button
+                id="generate-weekly-btn"
+                onClick={onGenerateWeeklyReflection}
+                disabled={isGeneratingReflection || entries.length === 0}
+                className="px-4 py-2 rounded-xl bg-[#C97C4C] hover:bg-[#B46A3B] text-[#FFFDF9] font-medium text-xs shadow-xs transition-all flex items-center space-x-1.5 disabled:opacity-50 active:scale-[0.98]"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isGeneratingReflection ? 'animate-spin' : ''}`} />
+                <span>{isGeneratingReflection ? 'Synthesizing...' : 'Refresh'}</span>
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -254,9 +307,16 @@ export const InsightsScreen: React.FC<InsightsScreenProps> = ({
                   <Sparkles className="w-4 h-4 text-[#C97C4C]" />
                 </div>
                 <div>
-                  <span className="text-xs font-bold tracking-wider uppercase text-[#C97C4C]">
-                    Weekly Reflection Mirror
-                  </span>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-xs font-bold tracking-wider uppercase text-[#C97C4C]">
+                      Weekly Reflection Mirror
+                    </span>
+                    {latestReflection && (
+                      <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-[#FAF0E8] text-[#8C5230] border border-[#EAD6C7]">
+                        Active Week
+                      </span>
+                    )}
+                  </div>
                   <p className="text-[11px] text-[#8C8075]">
                     {latestReflection
                       ? `${latestReflection.weekStartDate} — ${latestReflection.weekEndDate}`
@@ -265,9 +325,38 @@ export const InsightsScreen: React.FC<InsightsScreenProps> = ({
                 </div>
               </div>
 
-              <span className="text-[10px] text-[#8C8075] bg-[#FAF6EE] px-2.5 py-1 rounded-full border border-[#EAE0CD] self-start sm:self-auto">
-                AI-assisted synthesis · Safe & isolated
-              </span>
+              <div className="flex flex-wrap items-center gap-2">
+                {latestReflection && (
+                  <>
+                    <button
+                      id="open-mirror-popup-btn"
+                      onClick={() => {
+                        setWeeklyModalReflection(latestReflection);
+                        setShowWeeklyModal(true);
+                      }}
+                      className="px-3 py-1.5 rounded-xl bg-[#FAF6EE] hover:bg-[#EFE5D3] border border-[#E0D3BC] text-[#594C44] text-xs font-semibold transition-all flex items-center space-x-1.5 shadow-2xs active:scale-95"
+                      title="Open this Weekly Reflection as a Pop-up"
+                    >
+                      <Maximize2 className="w-3.5 h-3.5 text-[#C97C4C]" />
+                      <span>View as Pop-up</span>
+                    </button>
+
+                    <button
+                      id="open-chat-from-mirror-btn"
+                      onClick={() => setShowChatModal(true)}
+                      className="px-3 py-1.5 rounded-xl bg-[#FAF0E8] hover:bg-[#F0DECE] border border-[#EAD6C7] text-[#8C5230] text-xs font-semibold transition-all flex items-center space-x-1.5 shadow-2xs active:scale-95"
+                      title="Open AI Chatbot pop-up for this reflection"
+                    >
+                      <MessageSquare className="w-3.5 h-3.5 text-[#C97C4C]" />
+                      <span>Chat with Mirror</span>
+                    </button>
+                  </>
+                )}
+
+                <span className="text-[10px] text-[#8C8075] bg-[#FAF6EE] px-2.5 py-1 rounded-full border border-[#EAE0CD] self-start sm:self-auto hidden lg:inline">
+                  Safe & isolated
+                </span>
+              </div>
             </div>
 
             {latestReflection ? (
@@ -320,6 +409,31 @@ export const InsightsScreen: React.FC<InsightsScreenProps> = ({
                     >
                       <BookmarkCheck className="w-3.5 h-3.5" />
                       <span>{isSavingAnswers ? 'Saving Thoughts...' : 'Save Thoughts to History'}</span>
+                    </button>
+                  </div>
+
+                  {/* AI Companion Interactive Dialogue Banner */}
+                  <div className="p-4 rounded-2xl bg-[#FAF0E8]/80 border border-[#EAD6C7] flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-9 h-9 rounded-xl bg-[#FFFDF9] border border-[#EAD6C7] flex items-center justify-center text-[#C97C4C] shadow-2xs shrink-0">
+                        <Sparkles className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-bold text-[#2B231F]">
+                          Prefer an interactive conversational dialogue?
+                        </h4>
+                        <p className="text-[11px] text-[#7C7067] font-serif">
+                          Discuss these inquiries with the AI companion in a focused pop-up window. Completed chats are permanently archived in your Saved Dialogues.
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      id="launch-chat-modal-banner-btn"
+                      onClick={() => setShowChatModal(true)}
+                      className="px-3.5 py-2 rounded-xl bg-[#C97C4C] hover:bg-[#B46A3B] text-white text-xs font-semibold shadow-xs transition-all flex items-center space-x-1.5 self-start sm:self-auto shrink-0 active:scale-95"
+                    >
+                      <MessageSquare className="w-3.5 h-3.5" />
+                      <span>Chat in Pop-up</span>
                     </button>
                   </div>
 
@@ -579,6 +693,18 @@ export const InsightsScreen: React.FC<InsightsScreenProps> = ({
                       </div>
 
                       <div className="flex items-center space-x-2">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setWeeklyModalReflection(ref);
+                            setShowWeeklyModal(true);
+                          }}
+                          className="px-2.5 py-1 rounded-xl bg-[#FAF6EE] hover:bg-[#EFE5D3] border border-[#E0D3BC] text-[#594C44] text-xs font-semibold transition-all flex items-center space-x-1 shadow-2xs"
+                          title="Open this reflection as a pop-up"
+                        >
+                          <Maximize2 className="w-3 h-3 text-[#C97C4C]" />
+                          <span>Pop-up</span>
+                        </button>
                         {isExpanded ? (
                           <ChevronUp className="w-5 h-5 text-[#8C8075]" />
                         ) : (
@@ -771,6 +897,171 @@ export const InsightsScreen: React.FC<InsightsScreenProps> = ({
           )}
         </div>
       )}
+
+      {/* TAB 3: SEPARATE SAVED REFLECTION DIALOGUES SECTION */}
+      {activeTab === 'dialogues' && (
+        <div className="space-y-6 animate-fade-in">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2">
+            <div>
+              <h3 className="font-display text-xl font-semibold text-[#2B231F]">
+                Saved Reflection Dialogues
+              </h3>
+              <p className="text-xs text-[#7C7067] font-serif">
+                Completed conversations with your AI companion exploring weekly reflection inquiries.
+              </p>
+            </div>
+            <div className="flex items-center space-x-2">
+              <span className="text-xs font-semibold text-[#8C5230] bg-[#FAF0E8] border border-[#EAD6C7] px-3 py-1 rounded-full">
+                {reflectionChatSessions.length} {reflectionChatSessions.length === 1 ? 'Dialogue Saved' : 'Dialogues Saved'}
+              </span>
+              <button
+                id="new-dialogue-btn"
+                onClick={() => setShowChatModal(true)}
+                className="px-3.5 py-1.5 rounded-xl bg-[#C97C4C] hover:bg-[#B46A3B] text-white text-xs font-semibold shadow-xs transition-all flex items-center space-x-1.5 active:scale-95"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>New Dialogue</span>
+              </button>
+            </div>
+          </div>
+
+          {reflectionChatSessions.length === 0 ? (
+            <div className="bg-[#FFFDF9] border border-[#E8DFC8] rounded-3xl p-12 text-center space-y-4 shadow-xs">
+              <div className="w-12 h-12 rounded-2xl bg-[#FAF0E8] border border-[#EAD6C7] flex items-center justify-center text-[#C97C4C] mx-auto shadow-2xs">
+                <MessageSquare className="w-6 h-6" />
+              </div>
+              <div className="space-y-1">
+                <h4 className="font-display font-semibold text-base sm:text-lg text-[#2B231F]">
+                  No Saved Dialogues Yet
+                </h4>
+                <p className="text-xs text-[#7C7067] font-serif max-w-md mx-auto leading-relaxed">
+                  When you converse with the AI Companion in the pop-up and click "Complete & Save Dialogue", your conversation will be stored in this separate archive so you can re-read it anytime.
+                </p>
+              </div>
+              <button
+                onClick={() => setShowChatModal(true)}
+                className="mt-2 px-5 py-2.5 rounded-xl bg-[#C97C4C] hover:bg-[#B46A3B] text-white text-xs font-semibold shadow-xs transition-all inline-flex items-center space-x-2 active:scale-95"
+              >
+                <Sparkles className="w-4 h-4" />
+                <span>Start Reflection Dialogue (Pop-up)</span>
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {reflectionChatSessions.map((session) => {
+                const lastMessage = session.messages[session.messages.length - 1];
+
+                return (
+                  <div
+                    key={session.id}
+                    className="bg-[#FFFDF9] border border-[#E0D3BC] rounded-3xl p-5 sm:p-6 space-y-4 shadow-xs hover:border-[#C97C4C]/60 transition-all flex flex-col justify-between group"
+                  >
+                    <div className="space-y-3">
+                      {/* Top Meta */}
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center space-x-2">
+                          <div className="w-7 h-7 rounded-lg bg-[#FAF0E8] border border-[#EAD6C7] flex items-center justify-center text-[#C97C4C]">
+                            <MessageSquare className="w-3.5 h-3.5" />
+                          </div>
+                          <span className="text-xs font-semibold text-[#2B231F] flex items-center space-x-1">
+                            <Calendar className="w-3 h-3 text-[#8C8075]" />
+                            <span>{new Date(session.completedAt || session.createdAt).toLocaleDateString()}</span>
+                          </span>
+                        </div>
+                        <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-[#FAF0E8] text-[#8C5230] border border-[#EAD6C7]">
+                          {session.messages.length} messages
+                        </span>
+                      </div>
+
+                      {/* Inquiry Explored */}
+                      <div className="space-y-1">
+                        <span className="text-[10px] font-bold text-[#8C8075] uppercase tracking-wider flex items-center space-x-1">
+                          <HelpCircle className="w-3 h-3 text-[#C97C4C]" />
+                          <span>Inquiry Explored</span>
+                        </span>
+                        <p className="font-serif text-sm text-[#2B231F] italic font-medium line-clamp-2">
+                          "{session.firstQuestion}"
+                        </p>
+                      </div>
+
+                      {/* Excerpt / Last response */}
+                      {lastMessage && (
+                        <div className="p-3 rounded-xl bg-[#FAF6EE] border border-[#EAE1CF] text-xs font-serif text-[#665950] line-clamp-2 italic">
+                          <span className="font-semibold text-[#8C5230] not-italic mr-1">
+                            {lastMessage.sender === 'user' ? 'You:' : 'Companion:'}
+                          </span>
+                          {lastMessage.text}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Actions */}
+                    <div className="pt-3 border-t border-[#EFE7D8] flex items-center justify-between">
+                      <button
+                        onClick={() => setSelectedDialogueSession(session)}
+                        className="px-3.5 py-1.5 rounded-xl bg-[#FAF0E8] hover:bg-[#F2E0CF] text-[#8C5230] border border-[#EAD6C7] text-xs font-semibold transition-all flex items-center space-x-1.5 shadow-2xs"
+                      >
+                        <BookOpen className="w-3.5 h-3.5 text-[#C97C4C]" />
+                        <span>Read Full Dialogue</span>
+                      </button>
+
+                      {onDeleteChatSession && (
+                        <button
+                          onClick={async () => {
+                            if (window.confirm('Delete this saved conversation?')) {
+                              await onDeleteChatSession(session.id);
+                            }
+                          }}
+                          className="p-1.5 rounded-lg text-[#9E9187] hover:text-red-600 hover:bg-red-50 transition-colors"
+                          title="Delete saved conversation"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Pop-up Modal 1: AI Chatbot Experience */}
+      <ReflectionChatModal
+        isOpen={showChatModal}
+        onClose={() => setShowChatModal(false)}
+        weeklyReflection={latestReflection}
+        onSaveSession={async (session) => {
+          if (onSaveChatSession) {
+            await onSaveChatSession(session);
+          }
+        }}
+        userId={userId || ''}
+      />
+
+      {/* Pop-up Modal 2: Weekly Reflection Pop-up Experience */}
+      <WeeklyReflectionModal
+        isOpen={showWeeklyModal}
+        onClose={() => {
+          setShowWeeklyModal(false);
+          setWeeklyModalReflection(null);
+        }}
+        reflection={weeklyModalReflection || latestReflection}
+        onSaveAnswers={async (updated) => {
+          await onSaveWeeklyReflection(updated);
+        }}
+        onOpenChatModal={() => {
+          setShowChatModal(true);
+        }}
+      />
+
+      {/* Pop-up Modal 3: View Details of Saved Dialogue */}
+      <SavedDialogueDetailModal
+        session={selectedDialogueSession}
+        onClose={() => setSelectedDialogueSession(null)}
+        onDelete={onDeleteChatSession}
+      />
     </div>
   );
 };

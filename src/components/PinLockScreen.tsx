@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Lock, Delete, ArrowRight, Shield } from 'lucide-react';
+import hearthnoteLogo from '../assets/images/app_logo.png';
 
 interface PinLockScreenProps {
   expectedPin: string;
@@ -48,9 +49,14 @@ export const PinLockScreen: React.FC<PinLockScreenProps> = ({
     <div className="fixed inset-0 z-50 bg-[#FAF6EE] text-[#4A3F39] flex flex-col items-center justify-center p-6 selection:bg-[#C97C4C]/25">
       <div className="max-w-xs w-full text-center space-y-7">
         {/* Brand & Lock Icon */}
-        <div className="space-y-2">
-          <div className="w-14 h-14 rounded-3xl bg-[#FFFDF9] border border-[#E8DFC8] text-[#C97C4C] mx-auto flex items-center justify-center shadow-xs">
-            <Lock className="w-6 h-6" />
+        <div className="space-y-2 flex flex-col items-center">
+          <div className="w-16 h-16 rounded-3xl border border-[#E8DFC8] bg-[#FFFDF9] shadow-xs flex items-center justify-center overflow-hidden flex-shrink-0 mb-1">
+            <img 
+              src={hearthnoteLogo} 
+              alt="Hearthnote Logo" 
+              className="w-full h-full object-cover scale-[1.75]"
+              referrerPolicy="no-referrer"
+            />
           </div>
           <h2 className="font-display font-semibold text-2xl text-[#2B231F]">
             Hearthnote Locked

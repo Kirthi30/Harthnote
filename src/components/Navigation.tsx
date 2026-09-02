@@ -12,6 +12,7 @@ import {
   User as UserIcon 
 } from 'lucide-react';
 import type { AppView, UserProfile } from '../types';
+import hearthnoteLogo from '../assets/images/app_logo.png';
 
 interface NavigationProps {
   currentView: AppView;
@@ -52,8 +53,13 @@ export const Navigation: React.FC<NavigationProps> = ({
             onClick={() => onNavigate('home')}
             className="flex items-center space-x-3 cursor-pointer group"
           >
-            <div className="w-9 h-9 rounded-xl bg-[#C97C4C] text-[#FFFDF9] flex items-center justify-center shadow-sm group-hover:bg-[#B46A3B] transition-colors">
-              <span className="font-display font-bold text-lg">H</span>
+            <div className="w-10 h-10 rounded-xl border border-[#E8DFC8] bg-[#FFFDF9] shadow-xs flex items-center justify-center overflow-hidden flex-shrink-0 group-hover:scale-105 transition-transform">
+              <img 
+                src={hearthnoteLogo} 
+                alt="Hearthnote Logo" 
+                className="w-full h-full object-cover scale-[1.75]"
+                referrerPolicy="no-referrer"
+              />
             </div>
             <div>
               <h1 className="font-display font-semibold text-lg text-[#2B231F] leading-tight">Hearthnote</h1>
@@ -69,7 +75,7 @@ export const Navigation: React.FC<NavigationProps> = ({
               </div>
               <div>
                 <div className="text-xs font-semibold text-[#2B231F]">
-                  {streakCount} {streakCount === 1 ? 'Day' : 'Days'} Reflection
+                  {streakCount} {streakCount === 1 ? 'Day' : 'Days'} Streak
                 </div>
                 <div className="text-[11px] text-[#7C7067]">Quiet consistency</div>
               </div>

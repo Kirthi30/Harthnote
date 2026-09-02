@@ -9,10 +9,26 @@ import {
   Save, 
   ChevronDown, 
   ChevronUp,
-  Smile
+  Smile,
+  Quote,
+  Plus,
+  RefreshCw,
+  Lightbulb,
+  X
 } from 'lucide-react';
 import type { JournalEntry, MoodType, TemplateType, UserProfile } from '../types';
 import { JOURNAL_TEMPLATES, MOODS } from '../data/templates';
+
+const INSPIRED_PROMPTS = [
+  "What is one small, quiet moment from today that brought you a sense of ease?",
+  "If your mind were a room right now, what does it look like and what would make it feel cozier?",
+  "What is a thought or feeling you've been carrying quietly that needs room to breathe?",
+  "What is one unexpected kindness—given, received, or witnessed—that touched you recently?",
+  "What is a gentle truth or lesson this week has been nudging you to notice?",
+  "What can you give yourself full, compassionate permission to let go of today?",
+  "Where in your body or in your day did you feel most grounded and at home with yourself?",
+  "What is something simple you are genuinely looking forward to, no matter how small?",
+];
 
 interface JournalEditorProps {
   initialTemplate?: TemplateType;
@@ -51,6 +67,14 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
   const [showPromptsHelper, setShowPromptsHelper] = useState(true);
   const [draftSavedTime, setDraftSavedTime] = useState<string | null>(null);
 
+  // Quote Generator State
+  const [generatedQuote, setGeneratedQuote] = useState<{ quote: string; author: string } | null>(null);
+  const [isGeneratingQuote, setIsGeneratingQuote] = useState(false);
+  const [quoteAdded, setQuoteAdded] = useState(false);
+
+  // Inspired Reflection Prompt State
+  const [currentInspiredPrompt, setCurrentInspiredPrompt] = useState<string | null>(null);
+
   // Sync mood if initialEntry or initialMood updates
   useEffect(() => {
     if (initialEntry?.mood) {
@@ -86,6 +110,60 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
       ...prev,
       [qId]: val,
     }));
+  };
+
+  const handleGenerateQuote = async () => {
+    setIsGeneratingQuote(true);
+    setQuoteAdded(false);
+    try {
+      const res = await fetch('/api/gemini/generate-quote', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          entryText: text,
+          mood: selectedMood,
+          promptAnswers,
+        }),
+      });
+      const data = await res.json();
+      if (data.quote) {
+        setGeneratedQuote({ quote: data.quote, author: data.author || 'Journal Companion' });
+      }
+    } catch (err) {
+      console.error('Quote generation error:', err);
+      setGeneratedQuote({
+        quote: 'In the quiet stream of your own thoughts, truth finds its natural voice.',
+        author: 'Hearthnote Reflection',
+      });
+    } finally {
+      setIsGeneratingQuote(false);
+    }
+  };
+
+  const handleAddQuoteToJournal = () => {
+    if (!generatedQuote) return;
+    const quoteBlock = `\n\n> "${generatedQuote.quote}"\n— ${generatedQuote.author}`;
+    setText((prev) => (prev ? prev + quoteBlock : quoteBlock.trim()));
+    setQuoteAdded(true);
+  };
+
+  const handleGetInspired = () => {
+    let pool = INSPIRED_PROMPTS;
+    if (currentInspiredPrompt) {
+      pool = INSPIRED_PROMPTS.filter((p) => p !== currentInspiredPrompt);
+    }
+    const randomPrompt = pool[Math.floor(Math.random() * pool.length)];
+    setCurrentInspiredPrompt(randomPrompt);
+  };
+
+  const handleInsertInspiredPrompt = () => {
+    if (!currentInspiredPrompt) return;
+    const promptFormatted = `\n\n> *Prompt: ${currentInspiredPrompt}*\n\n`;
+    if (!text.trim()) {
+      setText(`> *Prompt: ${currentInspiredPrompt}*\n\n`);
+    } else {
+      setText((prev) => `${prev.trim()}${promptFormatted}`);
+    }
   };
 
   const handleSave = async () => {
@@ -168,7 +246,7 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
           </div>
 
           {/* In-Editor Mood Selector */}
-          <div className="flex items-center space-x-1.5 bg-[#FAF6EE] p-1 rounded-xl border border-[#EAE1CF]">
+          <div className="flex flex-wrap items-center gap-1.5 bg-[#FAF6EE] p-1.5 rounded-xl border border-[#EAE1CF]">
             <span className="text-[11px] font-medium text-[#7C7067] px-2 flex items-center space-x-1">
               <Smile className="w-3 h-3" />
               <span>Mood:</span>
@@ -239,18 +317,70 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
         )}
 
         {/* Entry Title */}
-        <div className="space-y-1">
-          <input
-            type="text"
-            placeholder={currentTemplate.starterPrompt}
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            className="w-full font-display text-xl sm:text-2xl font-semibold text-[#2B231F] placeholder:text-[#B4A79A] border-none bg-transparent focus:outline-hidden px-0"
-          />
-          <div className="text-[11px] text-[#8C8075] font-serif">
-            {new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2.5">
+          <div className="space-y-1 flex-1">
+            <input
+              type="text"
+              placeholder={currentTemplate.starterPrompt}
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="w-full font-display text-xl sm:text-2xl font-semibold text-[#2B231F] placeholder:text-[#B4A79A] border-none bg-transparent focus:outline-hidden px-0"
+            />
+            <div className="text-[11px] text-[#8C8075] font-serif">
+              {new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+            </div>
           </div>
+
+          <button
+            type="button"
+            onClick={handleGetInspired}
+            className="self-start sm:self-auto px-3.5 py-1.5 rounded-xl bg-[#FAF0E8] hover:bg-[#F2E5D8] text-[#C97C4C] border border-[#F0D5BE] text-xs font-semibold flex items-center space-x-1.5 transition-colors cursor-pointer shadow-2xs flex-shrink-0"
+            title="Generate a gentle writing prompt to overcome writer's block"
+          >
+            <Lightbulb className="w-3.5 h-3.5 text-[#C97C4C]" />
+            <span>Get Inspired</span>
+          </button>
         </div>
+
+        {/* Inspired Prompt Card when active */}
+        {currentInspiredPrompt && (
+          <div className="p-4 rounded-2xl bg-[#FAF0E8] border border-[#F0D5BE] space-y-2.5 animate-fade-in">
+            <div className="flex items-center justify-between">
+              <div className="text-xs font-semibold text-[#8C522A] flex items-center space-x-1.5 uppercase tracking-wider">
+                <Lightbulb className="w-4 h-4 text-[#C97C4C]" />
+                <span>Gentle Reflection Prompt</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCurrentInspiredPrompt(null)}
+                className="text-[#A3978C] hover:text-[#2B231F] text-xs cursor-pointer p-1"
+                aria-label="Close prompt"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+            <p className="text-xs sm:text-sm font-serif font-medium text-[#2B231F] leading-relaxed italic">
+              "{currentInspiredPrompt}"
+            </p>
+            <div className="flex items-center space-x-2 pt-1">
+              <button
+                type="button"
+                onClick={handleInsertInspiredPrompt}
+                className="px-3 py-1.5 rounded-xl bg-[#C97C4C] hover:bg-[#B46A3B] text-white text-xs font-semibold flex items-center space-x-1 transition-colors cursor-pointer shadow-2xs"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Insert Prompt into Page</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleGetInspired}
+                className="px-3 py-1.5 rounded-xl bg-[#FFFDF9] hover:bg-[#F4ECE1] text-[#7C7067] hover:text-[#2B231F] border border-[#E8DFC8] text-xs font-semibold transition-colors cursor-pointer"
+              >
+                <span>Another Prompt</span>
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Writing Surface / Freeform Text Area */}
         <div className="relative">
@@ -261,6 +391,57 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
             placeholder="Write your thoughts freely here. No rushing, no rules..."
             className="w-full notebook-lines font-serif text-base text-[#2B231F] placeholder:text-[#A89C8F] border-none bg-transparent focus:outline-hidden resize-y leading-7 selection:bg-[#C97C4C]/25"
           />
+        </div>
+
+        {/* AI Inspired Quote Generator Section */}
+        <div className="bg-[#FAF4E8] border border-[#E8DFC8] rounded-2xl p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2 text-[#C97C4C]">
+              <Quote className="w-4 h-4" />
+              <span className="text-xs font-semibold uppercase tracking-wider">
+                Content-Inspired Quote
+              </span>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleGenerateQuote}
+              disabled={isGeneratingQuote}
+              className="px-3 py-1.5 rounded-xl bg-[#FAF0E8] hover:bg-[#F4E3D5] text-[#C97C4C] text-xs font-semibold transition-all flex items-center space-x-1.5 cursor-pointer disabled:opacity-50"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>{isGeneratingQuote ? 'Generating...' : generatedQuote ? 'Refresh Quote' : 'Generate Quote from Writing'}</span>
+            </button>
+          </div>
+
+          {generatedQuote && (
+            <div className="p-3.5 rounded-xl bg-[#FFFDF9] border border-[#EAE1CF] space-y-2.5 animate-fade-in">
+              <p className="text-xs font-serif italic text-[#2B231F] leading-relaxed">
+                "{generatedQuote.quote}"
+              </p>
+              <div className="flex items-center justify-between text-[11px] pt-1">
+                <span className="text-[#8C8075] font-serif">— {generatedQuote.author}</span>
+                <button
+                  type="button"
+                  onClick={handleAddQuoteToJournal}
+                  disabled={quoteAdded}
+                  className="px-3 py-1 rounded-lg bg-[#C97C4C] hover:bg-[#B46A3B] text-[#FFFDF9] font-medium text-xs transition-colors flex items-center space-x-1 disabled:bg-[#4D7C5F] disabled:cursor-default"
+                >
+                  {quoteAdded ? (
+                    <>
+                      <Check className="w-3 h-3" />
+                      <span>Added into Journal</span>
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="w-3 h-3" />
+                      <span>Add Quote into Journal</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Bottom Info Bar */}

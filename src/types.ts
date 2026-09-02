@@ -1,4 +1,14 @@
-export type MoodType = 'radiant' | 'calm' | 'reflective' | 'tender' | 'weary';
+export type MoodType = 
+  | 'radiant' 
+  | 'calm' 
+  | 'hopeful' 
+  | 'reflective' 
+  | 'tender' 
+  | 'anxious' 
+  | 'sad' 
+  | 'angry' 
+  | 'overwhelmed' 
+  | 'weary';
 
 export interface MoodMeta {
   type: MoodType;
@@ -71,6 +81,29 @@ export interface WeeklyReflection {
   entriesCount: number;
   createdAt: number;
   savedAt?: number;
+}
+
+export interface ChatMessage {
+  id: string;
+  sender: 'user' | 'ai';
+  text: string;
+  timestamp: number;
+  timeLabel?: string;
+  questionIndex?: number;
+}
+
+export interface ReflectionChatSession {
+  id: string;
+  userId: string;
+  title?: string;
+  weeklyReflectionId?: string;
+  weeklyReflectionDate?: string;
+  firstQuestion: string;
+  messages: ChatMessage[];
+  messageCount?: number;
+  summary?: string;
+  createdAt: number;
+  completedAt: number;
 }
 
 export interface UserProfile {
