@@ -2,7 +2,7 @@
 
 > *"A warm place to keep your thoughts."*
 
-Hearthnote is a distraction-free, notebook-style personal journaling and reflection web application. Built with **React 19**, **Tailwind CSS**, **Cloud Firestore**, and the **Gemini 3.6 Flash API**, it prioritizes human reflection first and gentle AI synthesis second.
+Hearthnote is a distraction-free, notebook-style personal journaling, mood-tracking, and contemplative reflection web application. Built with **React 19**, **Tailwind CSS**, **Google Cloud Firestore**, **Node.js / Express**, and the **Gemini 3.6 Flash API**, it prioritizes human reflection first and gentle, supportive AI synthesis second.
 
 ---
 
@@ -12,11 +12,11 @@ Hearthnote incorporates defense-in-depth across the **5 Core Threat Zones**:
 
 | Threat Zone | Risk Scenario | Implemented Mitigation |
 |---|---|---|
-| **1. Input Surfaces** | Malicious injection in journal text, oversized payloads crashing server, XSS in journal entries. | Strict express JSON size limits (10MB), client and server-side text sanitization, parameterized writes, and React safe text rendering. |
-| **2. Planning & Reasoning** | Prompt injection attempting to alter AI persona into giving medical advice, crisis diagnosis, or breaking privacy guidelines. | Immutable system instructions strictly enforcing warm non-clinical tone, strict schema validation via JSON responseSchema, and distress detection rules. |
-| **3. Tool Execution & Server APIs** | SSRF or unauthenticated API access to Gemini proxy endpoints; excessive requests exhausting quota. | Server-side Gemini API proxy, resilient fallback ladder (`gemini-3.6-flash` -> `gemini-3.1-flash-lite` -> `gemini-flash-latest` -> `gemini-3.7-flash`), rate-limiting error handling, zero exposure of `GEMINI_API_KEY` to client. |
-| **4. Memory & State** | Cross-user data leakage in Firestore, unauthorized reads of other users' journals, unauthenticated tampering. | Cloud Firestore security rules with strict user isolation (`request.auth.uid == userId`), `firebase-blueprint.json` schema validation, immutable `userId` and `createdAt` fields, client-side PIN convenience lock with plain-language disclosure. |
-| **5. Inter-System Communication** | Leakage of API tokens in error payloads or client bundles. | Zero hardcoded keys; all secrets retrieved exclusively via `process.env.GEMINI_API_KEY`; sanitized error responses returned to frontend without leaking stack traces or internal environment variables. |
+| **1. Input Surfaces** | Malicious injection in journal text, oversized payloads crashing server, XSS in journal entries or voice dictation transcripts. | Strict Express JSON payload limits (10MB), client and server-side text sanitization, parameterized writes, null-safe payload ingestion, and React-safe DOM property rendering (no `dangerouslySetInnerHTML`). |
+| **2. Planning & Reasoning** | Prompt injection attempting to alter AI persona into giving clinical diagnoses, crisis advice, or violating user privacy boundaries. | Immutable system instructions strictly enforcing warm non-clinical tone, strict schema validation via JSON `responseSchema`, non-diagnostic boundary disclaimers, and automated distress detection with 988 Crisis Lifeline guidance. |
+| **3. Tool Execution & Server APIs** | SSRF or unauthenticated API access to Gemini proxy endpoints; excessive requests exhausting quota. | Server-side Gemini API proxy, resilient fallback ladder (`gemini-3.6-flash` → `gemini-3.1-flash-lite` → `gemini-flash-latest` → `gemini-3.7-flash`), rate-limiting error handling, zero exposure of `GEMINI_API_KEY` to client browser. |
+| **4. Memory & State** | Cross-user data leakage in Firestore, unauthorized reads/writes to other users' journals, unauthenticated tampering. | Cloud Firestore security rules with strict path-bound user isolation (`request.auth.uid == userId`), `firebase-blueprint.json` schema validation, immutable `userId` and `createdAt` fields, client-side PIN convenience lock with plain-language security disclosures. |
+| **5. Inter-System Communication** | Leakage of API tokens in error payloads or client bundles. | Zero hardcoded keys; operational secrets retrieved exclusively via Google Cloud Secret Manager and `process.env.GEMINI_API_KEY`; sanitized error responses returned to frontend without leaking stack traces or internal environment variables. |
 
 ---
 
@@ -24,12 +24,36 @@ Hearthnote incorporates defense-in-depth across the **5 Core Threat Zones**:
 
 | Component | Technology | Purpose |
 |---|---|---|
-| **Frontend Framework** | React 19 + TypeScript + Vite | Distraction-free, responsive notebook UI |
-| **Styling & Design** | Tailwind CSS + Warm Paper Theme | Fraunces display serif, Lora body, ivory `#FAF6EE` background, terracotta `#C97C4C` accents |
-| **User Identity** | Firebase Authentication | Google Sign-In with popup OAuth, zero local password storage |
-| **Database** | Google Cloud Firestore | Per-user isolated document storage for entries, mood logs, and reflections |
-| **Backend Server** | Node.js + Express | API proxy for Gemini, static asset server, and Vite dev middleware |
-| **AI Synthesis** | Google GenAI SDK (`@google/genai`) | Server-side 1-2 sentence "gentle thoughts" and weekly reflection mirrors |
+| **Frontend Framework** | React 19 + TypeScript + Vite | Distraction-free, responsive notebook UI with fluid view transitions |
+| **Styling & Design** | Tailwind CSS + Warm Paper Theme | Fraunces display serif, Lora body, ivory `#FAF6EE` canvas, terracotta `#C97C4C` accents, bespoke illustrated mood icons |
+| **User Identity** | Firebase Authentication | Google Sign-In with popup OAuth, guest exploration mode, zero local password storage |
+| **Database** | Google Cloud Firestore | Per-user isolated document storage for entries, mood logs, weekly reflections, and saved dialogue sessions |
+| **Backend Server** | Node.js + Express | Authenticated API proxy for Gemini, static asset server, and Vite development middleware |
+| **AI Synthesis** | Google GenAI SDK (`@google/genai`) | Server-side 1-2 sentence "gentle thoughts", multi-turn weekly inquiry companion, speech polishing, and emotional mirrors |
+| **Voice Dictation** | Web Speech API | Multi-language voice dictation across 18 localized languages with gentle text polish |
+
+---
+
+## ✨ Key Features & Capabilities
+
+- **10 Custom Illustrated Mood Archetypes**:
+  - *Radiant* (Golden sun), *Calm* (Botanical branch), *Hopeful* (Sparkle stars), *Reflective* (Autumn leaves), *Tender* (Blooming heart flower), *Anxious* (Lightning bolt), *Sad* (Sculpted teardrop), *Angry* (Campfire flame), *Overwhelmed / Tringara* (Tornado whirlwind), and *Weary* (Rain cloud).
+- **Distraction-Free Journaling**:
+  - Guided templates (*Gratitude & Small Joys*, *Evening Unwind*, *Morning Clarity*, *Overcoming Resistance*, *Free Writing*).
+  - Floating word counters, customizable prompt drawers, rich text formatting, and voice dictation.
+- **Gentle Post-Entry Reflections**:
+  - Optional, non-intrusive 1–2 sentence contemplative reflections generated post-save without cluttering the writing flow.
+- **Weekly Emotional Mirror & Insights**:
+  - 8-Week Historical Carousel for reviewing past weeks.
+  - Synthesis of mood trajectory, core themes, and personalized inquiry questions.
+- **Interactive Weekly Inquiry Companion**:
+  - Socratic dialogue modal exploring weekly patterns with context-aware Gemini responses.
+  - Multi-language voice dictation and one-click export of dialogue notes directly to journal entries.
+- **Privacy & User Sovereignty**:
+  - 3-Tier AI Memory Control (*None*, *Light*, *Deep*).
+  - Full data backup export in Markdown (`.md`), JSON (`.json`), and CSV (`.csv`).
+  - Account and data wipe with complete Firestore document purging.
+  - 4-Digit PIN screen lock for shared devices.
 
 ---
 
@@ -132,22 +156,23 @@ gcloud run services update hearthnote-app \
 
 ---
 
-## 🧪 Functional Walkthrough & Testing Guide
+## 🧪 Functional Stability & Test Walkthrough Guide
 
 | # | Feature / User Journey | Verification Steps | Expected Result |
 |---|---|---|---|
-| **1** | **Landing Page & Authentication** | 1. Open app.<br>2. Click **"Sign in with Google"** or **"Explore Demo Notebook"**. | User lands immediately in private dashboard with personalized greeting and streak summary. |
-| **2** | **Daily Mood Check-In** | 1. On Home screen, tap any of the 5 gentle moods (e.g. *Calm 🌿*).<br>2. Observe the 7-day dot trail. | Mood is persisted immediately to Firestore `/users/{uid}/moodLogs` and dot trail highlights today. |
-| **3** | **Template Selection & Writing** | 1. Click **"Gratitude & Small Joys"**.<br>2. Answer guiding questions or write freely in the lined paper surface.<br>3. Select entry mood.<br>4. Click **"Close & Save Entry"**. | Entry is saved to Firestore. A gentle settling transition displays the confirmation with a 1-2 sentence gentle thought from Gemini. |
-| **4** | **Notebook History & Filtering** | 1. Navigate to **History** tab.<br>2. Toggle between **List** and **Calendar** views.<br>3. Filter by template (e.g. Gratitude) or search by keyword.<br>4. Click an entry card. | Read-only notebook view opens showing entry details, guiding questions, and gentle thoughts. User can Edit or Delete entry. |
-| **5** | **Insights, Inquiries & Reflection History** | 1. Navigate to **Insights** tab.<br>2. Review 7-day mood flow.<br>3. Click **"Refresh"** to generate AI emotional synthesis.<br>4. Type answers in the **"Gentle Inquiries to Ponder"** input fields.<br>5. Click **"Save Thoughts to History"**.<br>6. Switch to the **"Reflection History"** tab to view saved weekly mirrors and past recorded inquiry thoughts. | User thoughts are stored with the weekly mirror in Firestore. History tab displays chronological archive of past reflections and user inquiry responses. |
-| **6** | **AI Reflection Chatbot Pop-up & Saved Dialogues Archive** | 1. In Insights tab, click **"Chat with AI Mirror"** in header or **"Chat in Pop-up"** banner.<br>2. A dedicated modal pop-up appears.<br>3. Pick an inquiry question or prompt the AI companion.<br>4. Exchange thoughtful messages with the context-aware Gemini model.<br>5. Click **"Complete & Save Dialogue"**.<br>6. Switch to the **"Saved Dialogues"** tab in Insights.<br>7. Click **"Read Full Dialogue"** or delete. | Dialogue is conducted in a focused pop-up. Upon completion, the conversation is persisted to Firestore (`/users/{uid}/reflectionChats/{chatId}`) and displayed in the separate "Saved Dialogues" section. |
-| **7** | **Weekly Reflection Pop-up Modal** | 1. On the Current Mirror card or on any card in Reflection History, click **"View as Pop-up"** / **"Pop-up"**.<br>2. A distraction-free modal pop-up opens displaying the full reflection, emotional curve, recurring themes, and interactive inquiries.<br>3. Type inquiry answers and click **"Save Reflections"**.<br>4. Click **"Explore Inquiries with AI Chat"** to transition directly into conversational mode. | Weekly reflection is viewable and editable within a focused pop-up dialog without page clutter. |
-| **8** | **Settings & Memory Configuration** | 1. Navigate to **Settings**.<br>2. Change AI Memory Level (None / Light / Deep).<br>3. Set daily reminder time.<br>4. Set a 4-digit PIN lock. | Settings and security preferences are saved immediately to `/users/{uid}` with confirmation toast. |
-| **9** | **PIN Screen Lock** | 1. In navigation, click **"Lock Notebook"**.<br>2. Attempt incorrect PIN, then correct PIN. | App prompts for 4 digits with animated dot feedback and unlocks smoothly upon matching code. |
+| **1** | **Landing Page & Authentication** | 1. Open app.<br>2. Click **"Sign in with Google"** or **"Explore Demo Notebook"**. | User lands immediately in private dashboard with personalized greeting, mood selector, and streak summary. |
+| **2** | **Daily Mood Check-In & Streak** | 1. On Home screen, tap any illustrated mood logo (e.g. *Radiant ☀️* or *Calm 🌿*).<br>2. Observe the 7-day dot trail and streak counter. | Mood is persisted immediately to Firestore (`/users/{uid}/moodLogs`) and today's status updates with the custom vector mark. |
+| **3** | **Template Selection & Journal Writing** | 1. Click **"Write Entry"** or choose a template like *Gratitude & Small Joys*.<br>2. Answer guided prompts or write freely.<br>3. Test voice dictation via microphone icon.<br>4. Select entry mood and click **"Save Entry"**. | Entry is saved to Firestore. A settling transition opens the post-save modal displaying a gentle 1-2 sentence reflection thought from Gemini. |
+| **4** | **Notebook History & Filtering** | 1. Navigate to **History** tab.<br>2. Toggle between **List** and **Calendar** views.<br>3. Filter by mood (e.g. *Tender*) or template, or search by keyword.<br>4. Click any entry card. | Read-only notebook view opens showing entry content, prompt answers, mood badge, and gentle thought. User can Edit or Delete the entry. |
+| **5** | **Weekly Insights & Emotional Mirror** | 1. Navigate to **Insights** tab.<br>2. Use the 8-Week Carousel to pick a week window.<br>3. Click **"Generate Weekly Reflection"**.<br>4. Review the mood trajectory, core themes, and gentle inquiry prompts. | AI synthesis is generated via the server-side Gemini fallback ladder and persisted to Firestore. |
+| **6** | **Interactive Weekly Inquiry Dialogue** | 1. In Insights tab, click **"Begin Inquiry Dialogue"**.<br>2. Select a starting prompt or speak via voice dictation.<br>3. Exchange multi-turn reflective thoughts with the Socratic AI companion.<br>4. Click **"Save Conversation as Reflection Note"**. | Conversation is saved to Firestore (`/users/{uid}/reflectionChats/{chatId}`) and archived in the Saved Dialogues tab. |
+| **7** | **AI Memory Depth & Verification** | 1. In **Settings**, change AI Memory Level between *None*, *Light*, and *Deep*.<br>2. Click **"Verify AI Memory Depth"**.<br>3. Confirm live API test verifies the configured memory constraint. | System enforces memory boundary; in *None* mode, AI synthesis is disabled and journal content remains private. |
+| **8** | **Data Portability & Backup Export** | 1. In **Settings**, select *Markdown (.md)*, *JSON (.json)*, or *CSV (.csv)*.<br>2. Click **"Download Backup"**. | A formatted backup file containing all user entries, timestamps, and mood metadata downloads immediately. |
+| **9** | **PIN Screen Lock & Privacy** | 1. In Settings, enable PIN Lock and enter a 4-digit code.<br>2. Click **"Lock Notebook"** in the top navigation.<br>3. Test incorrect PIN, then correct PIN. | App prompts for 4 digits with animated dot feedback and unlocks smoothly upon entering the correct PIN. |
+| **10** | **Account Deletion & Data Wipe** | 1. In Settings, click **"Delete Account & All Data"**.<br>2. Type confirmation text `DELETE ALL MY DATA` and confirm. | All Firestore collections and subcollections for the user are purged, user signs out, and session resets to landing page. |
 
 ---
 
 ## 📜 License & Disclaimers
 
-Hearthnote is a non-diagnostic, contemplative companion designed for mindful reflection. It is not intended as a substitute for medical or clinical care. If you or someone you know is in crisis, please connect with the Suicide & Crisis Lifeline by calling or texting **988**.
+Hearthnote is a non-diagnostic, contemplative companion designed for mindful personal reflection. It is not intended as a substitute for medical or clinical care. If you or someone you know is in crisis, please connect with the Suicide & Crisis Lifeline by calling or texting **988**.
