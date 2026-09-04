@@ -38,8 +38,8 @@ export const Navigation: React.FC<NavigationProps> = ({
   const navItems: Array<{ id: AppView; label: string; icon: React.FC<{ className?: string }> }> = [
     { id: 'home', label: 'Home', icon: BookOpen },
     { id: 'write', label: 'Write', icon: PenLine },
-    { id: 'history', label: 'Notebook Pages', icon: Calendar },
-    { id: 'insights', label: 'Insights & Mirror', icon: Sparkles },
+    { id: 'history', label: 'History', icon: Calendar },
+    { id: 'insights', label: 'Insights', icon: Sparkles },
     { id: 'settings', label: 'Settings', icon: Settings },
   ];
 

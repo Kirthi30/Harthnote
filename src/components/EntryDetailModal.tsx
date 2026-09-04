@@ -9,10 +9,12 @@ import {
   Share2,
   Calendar,
   Smile,
-  X
+  X,
+  Quote
 } from 'lucide-react';
 import type { JournalEntry } from '../types';
-import { JOURNAL_TEMPLATES, MOODS } from '../data/templates';
+import { JOURNAL_TEMPLATES, MOODS, getTemplateById } from '../data/templates';
+import { MoodIcon } from './MoodIcon';
 
 interface EntryDetailModalProps {
   entry: JournalEntry | null;
@@ -20,6 +22,7 @@ interface EntryDetailModalProps {
   onEdit: (entry: JournalEntry) => void;
   onDelete: (entryId: string) => Promise<void>;
   onDismissReflection: (entryId: string) => void;
+  onKeepReflection?: (entryId: string, reflectionText?: string) => void;
 }
 
 export const EntryDetailModal: React.FC<EntryDetailModalProps> = ({
@@ -28,15 +31,17 @@ export const EntryDetailModal: React.FC<EntryDetailModalProps> = ({
   onEdit,
   onDelete,
   onDismissReflection,
+  onKeepReflection,
 }) => {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [copied, setCopied] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isKeptLocally, setIsKeptLocally] = useState(false);
 
   if (!entry) return null;
 
   const moodMeta = MOODS[entry.mood];
-  const templateMeta = JOURNAL_TEMPLATES.find((t) => t.id === entry.templateType);
+  const templateMeta = getTemplateById(entry.templateType);
 
   const handleCopy = () => {
     const fullText = `${entry.title || entry.templateTitle}\n${new Date(entry.createdAt).toLocaleDateString()}\nMood: ${moodMeta?.label}\n\n${entry.text}`;
@@ -101,8 +106,10 @@ export const EntryDetailModal: React.FC<EntryDetailModalProps> = ({
             <span className="px-2.5 py-1 rounded-lg bg-[#FAF0E8] text-[#C97C4C] font-semibold">
               {entry.templateTitle}
             </span>
-            <span className="px-2.5 py-1 rounded-lg bg-[#EFE8D8] text-[#5C5149] font-medium flex items-center space-x-1">
-              <span>{moodMeta?.emoji}</span>
+            <span className="px-2.5 py-1 rounded-lg bg-[#EFE8D8] text-[#5C5149] font-medium flex items-center space-x-1.5">
+              <div className="w-4 h-4 flex-shrink-0">
+                <MoodIcon mood={entry.mood} className="w-4 h-4" showGlow={false} />
+              </div>
               <span>{moodMeta?.label}</span>
             </span>
             <span className="text-[#8C8075]">
@@ -147,20 +154,60 @@ export const EntryDetailModal: React.FC<EntryDetailModalProps> = ({
           {entry.text}
         </div>
 
+        {/* Page-Inspired Quote / Phrase (if generated) */}
+        {entry.inspiredQuote && (
+          <div className="bg-[#FAF6EE] border border-[#E8DFC8] rounded-2xl p-4 space-y-1.5">
+            <div className="flex items-center space-x-1.5 text-xs text-[#C97C4C] font-semibold uppercase tracking-wider">
+              <Quote className="w-3.5 h-3.5" />
+              <span>Page-Inspired Quote & Phrase</span>
+            </div>
+            <p className="font-serif text-sm sm:text-base text-[#2B231F] italic leading-relaxed">
+              "{entry.inspiredQuote}"
+            </p>
+            {entry.inspiredQuoteAuthor && (
+              <p className="text-[11px] text-[#8C8075] font-serif text-right">
+                — {entry.inspiredQuoteAuthor}
+              </p>
+            )}
+          </div>
+        )}
+
         {/* Gentle Thought Box (if present) */}
         {entry.aiReflection && !entry.aiReflectionDismissed && (
-          <div className="bg-[#FAF0E8]/70 border border-[#EAD7C8] rounded-2xl p-4 space-y-2">
+          <div className="bg-[#FAF0E8]/70 border border-[#EAD7C8] rounded-2xl p-4 space-y-2.5">
             <div className="flex items-center justify-between text-xs text-[#C97C4C]">
               <div className="flex items-center space-x-1.5 font-semibold">
                 <Sparkles className="w-3.5 h-3.5" />
                 <span>A Gentle Thought</span>
               </div>
-              <button
-                onClick={() => onDismissReflection(entry.id)}
-                className="text-[10px] text-[#8C8075] hover:underline"
-              >
-                Hide
-              </button>
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => onDismissReflection(entry.id)}
+                  className="text-xs text-[#7C7067] hover:text-[#2B231F] px-2 py-1 rounded-lg hover:bg-[#EFE5D8] transition-colors cursor-pointer"
+                >
+                  Dismiss
+                </button>
+                {onKeepReflection && (
+                  <button
+                    onClick={() => {
+                      onKeepReflection(entry.id, entry.aiReflection);
+                      setIsKeptLocally(true);
+                    }}
+                    className={`text-xs px-2.5 py-1 rounded-lg font-medium flex items-center space-x-1 transition-colors shadow-xs cursor-pointer ${
+                      isKeptLocally || entry.text.includes(entry.aiReflection)
+                        ? 'bg-[#4D7C5F] text-[#FFFDF9]'
+                        : 'bg-[#C97C4C] hover:bg-[#B46A3B] text-[#FFFDF9]'
+                    }`}
+                  >
+                    <Check className="w-3 h-3" />
+                    <span>
+                      {isKeptLocally || entry.text.includes(entry.aiReflection)
+                        ? 'Kept in Entry'
+                        : 'Keep in Entry'}
+                    </span>
+                  </button>
+                )}
+              </div>
             </div>
             <p className="font-serif text-xs sm:text-sm text-[#4A3F39] italic leading-relaxed">
               "{entry.aiReflection}"

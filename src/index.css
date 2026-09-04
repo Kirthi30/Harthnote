@@ -42,3 +42,12 @@
   background: #C4B9A7;
 }
 
+/* Hide scrollbar for clean horizontal mobile toolbar scrolling */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+

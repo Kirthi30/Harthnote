@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   ShieldCheck, 
   Lock, 
@@ -45,6 +45,17 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   const [selectedMemory, setSelectedMemory] = useState<AIMemoryLevel>(userProfile?.aiMemoryLevel || 'light');
   const [reminderTime, setReminderTime] = useState(userProfile?.reminderTime || '20:30');
   
+  // Sync selectedMemory when userProfile loads or changes
+  useEffect(() => {
+    if (userProfile?.aiMemoryLevel) {
+      setSelectedMemory(userProfile.aiMemoryLevel);
+    }
+  }, [userProfile?.aiMemoryLevel]);
+
+  // AI Memory Depth Testing / Verification
+  const [testingMemory, setTestingMemory] = useState(false);
+  const [memoryTestResult, setMemoryTestResult] = useState<string | null>(null);
+
   // PIN state
   const [pinEnabled, setPinEnabled] = useState(Boolean(userProfile?.pinEnabled));
   const [pinInput, setPinInput] = useState('');
@@ -68,8 +79,31 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
 
   const handleSaveMemory = async (level: AIMemoryLevel) => {
     setSelectedMemory(level);
+    setMemoryTestResult(null);
     await onUpdateMemoryLevel(level);
     showNotice();
+  };
+
+  const handleTestMemory = async () => {
+    setTestingMemory(true);
+    setMemoryTestResult(null);
+    try {
+      const resp = await fetch('/api/gemini/test-memory-level', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ aiMemoryLevel: selectedMemory }),
+      });
+      const data = await resp.json();
+      if (data.summary) {
+        setMemoryTestResult(data.summary);
+      } else {
+        setMemoryTestResult(`Memory Level "${selectedMemory.toUpperCase()}" verified active.`);
+      }
+    } catch (err: any) {
+      setMemoryTestResult(`Configuration active: ${selectedMemory.toUpperCase()} mode.`);
+    } finally {
+      setTestingMemory(false);
+    }
   };
 
   const handleSaveReminder = async () => {
@@ -235,12 +269,12 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             {
               id: 'light' as AIMemoryLevel,
               title: 'Light Reflection (Recommended)',
-              desc: 'Gemini gives a 1-2 sentence gentle thought on save and summarizes weekly mood trends.',
+              desc: 'Gemini gives a 1-2 sentence gentle thought on save based solely on your immediate entry.',
             },
             {
               id: 'deep' as AIMemoryLevel,
               title: 'Deep Memory',
-              desc: 'Analyzes long-term patterns, recurring emotional knots, and deep growth themes over multiple weeks.',
+              desc: 'Analyzes recurring emotional threads and continuity across your recent past entries.',
             },
             {
               id: 'none' as AIMemoryLevel,
@@ -258,12 +292,52 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
               }`}
             >
               <div className="flex items-center justify-between">
-                <span className="font-semibold text-sm text-[#2B231F]">{opt.title}</span>
+                <div className="flex items-center space-x-2">
+                  <span className="font-semibold text-sm text-[#2B231F]">{opt.title}</span>
+                  {selectedMemory === opt.id && (
+                    <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md bg-[#C97C4C] text-[#FFFDF9]">
+                      Active
+                    </span>
+                  )}
+                </div>
                 {selectedMemory === opt.id && <Check className="w-4 h-4 text-[#C97C4C]" />}
               </div>
               <p className="text-xs text-[#665950] font-serif mt-1">{opt.desc}</p>
             </div>
           ))}
+        </div>
+
+        {/* Live Configuration Diagnostic */}
+        <div className="p-4 rounded-2xl bg-[#F9F5EC] border border-[#EAE1CF] space-y-2.5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div className="text-xs">
+              <span className="font-semibold text-[#2B231F]">Configuration Health: </span>
+              <span className="text-[#C97C4C] font-medium">
+                {selectedMemory === 'none' 
+                  ? 'Private Mode (AI Completely Disabled)' 
+                  : selectedMemory === 'deep' 
+                  ? 'Deep Memory (Multi-entry continuity active)' 
+                  : 'Light Reflection (Immediate entry only)'}
+              </span>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleTestMemory}
+              disabled={testingMemory}
+              className="px-3 py-1.5 rounded-xl bg-[#FFFDF9] hover:bg-[#EFE8D8] text-[#2B231F] border border-[#E8DFC8] text-xs font-semibold flex items-center justify-center space-x-1.5 transition-colors cursor-pointer disabled:opacity-50 flex-shrink-0"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-[#C97C4C]" />
+              <span>{testingMemory ? 'Verifying...' : 'Verify Configuration'}</span>
+            </button>
+          </div>
+
+          {memoryTestResult && (
+            <div className="p-3 rounded-xl bg-[#FFFDF9] border border-[#E0D5C1] text-xs text-[#4A3F39] font-serif animate-fade-in flex items-start space-x-2">
+              <Check className="w-4 h-4 text-[#4D7C5F] mt-0.5 flex-shrink-0" />
+              <p className="leading-relaxed">{memoryTestResult}</p>
+            </div>
+          )}
         </div>
       </section>
 

@@ -11,13 +11,16 @@ import {
   CheckCircle2, 
   BookOpen,
   Calendar as CalendarIcon,
-  ChevronRight
+  ChevronRight,
+  HeartHandshake
 } from 'lucide-react';
 import type { JournalEntry, MoodLog, MoodType, TemplateType, WeeklyReflection } from '../types';
 import { JOURNAL_TEMPLATES, MOODS } from '../data/templates';
+import { MoodIcon } from './MoodIcon';
 
 interface HomeScreenProps {
   userName: string;
+  onGeneralWrite: () => void;
   onSelectTemplate: (templateId: TemplateType) => void;
   onSelectMood: (mood: MoodType) => void;
   todayMood: MoodType | null;
@@ -26,20 +29,23 @@ interface HomeScreenProps {
   onViewEntry: (entry: JournalEntry) => void;
   onViewInsights: () => void;
   onViewHistory: () => void;
+  onViewAllEntries?: () => void;
   streakCount: number;
   moodLogsLast7Days: MoodLog[];
 }
 
 export const HomeScreen: React.FC<HomeScreenProps> = ({
   userName,
+  onGeneralWrite,
   onSelectTemplate,
   onSelectMood,
   todayMood,
   recentEntries,
-  latestWeeklyReflection,
+  latestWeeklyReflection: _latestWeeklyReflection,
   onViewEntry,
   onViewInsights,
   onViewHistory,
+  onViewAllEntries,
   streakCount,
   moodLogsLast7Days,
 }) => {
@@ -59,6 +65,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       case 'Moon': return Moon;
       case 'Compass': return Compass;
       case 'Wind': return Wind;
+      case 'HeartHandshake': return HeartHandshake;
       default: return PenTool;
     }
   };
@@ -118,16 +125,15 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               return (
                 <div key={idx} className="flex flex-col items-center space-y-1" title={`${d.dayName}: ${moodMeta?.label || 'No entry'}`}>
                   <div
-                    className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] transition-transform ${
+                    className={`w-6 h-6 rounded-full flex items-center justify-center p-0.5 transition-transform ${
                       moodMeta 
-                        ? 'shadow-xs hover:scale-110' 
+                        ? 'shadow-2xs hover:scale-110 bg-[#FFF8EE]' 
                         : d.isToday 
                         ? 'border-2 border-dashed border-[#C97C4C] bg-transparent' 
                         : 'bg-[#EADFCE]'
                     }`}
-                    style={{ backgroundColor: moodMeta ? moodMeta.color : undefined, color: '#FFF' }}
                   >
-                    {moodMeta ? moodMeta.emoji : ''}
+                    {d.mood ? <MoodIcon mood={d.mood} className="w-full h-full" showGlow={false} /> : null}
                   </div>
                   <span className={`text-[9px] ${d.isToday ? 'font-bold text-[#C97C4C]' : 'text-[#8C8075]'}`}>
                     {d.dayName[0]}
@@ -152,8 +158,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           </div>
 
           {todayMood && (
-            <span className="hidden sm:inline-flex items-center space-x-1 px-3 py-1 rounded-full text-xs font-medium bg-[#FAF0E8] text-[#C97C4C] border border-[#E8DFC8]">
-              <CheckCircle2 className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-[#FAF0E8] text-[#C97C4C] border border-[#E8DFC8]">
+              <MoodIcon mood={todayMood} className="w-4 h-4" showGlow={false} />
               <span>Logged: {MOODS[todayMood]?.label}</span>
             </span>
           )}
@@ -183,15 +189,15 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               <button
                 key={moodKey}
                 onClick={() => handleMoodClick(moodKey)}
-                className={`flex flex-col items-center p-3 rounded-2xl border transition-all cursor-pointer text-center group ${
+                className={`flex flex-col items-center p-3.5 rounded-2xl border transition-all cursor-pointer text-center group ${
                   isSelected
                     ? 'border-[#C97C4C] bg-[#FAF0E8] shadow-xs ring-1 ring-[#C97C4C]'
                     : 'border-[#EAE1CF] bg-[#FFFDF9] hover:bg-[#F9F5EC] hover:border-[#D6C7AE]'
                 }`}
               >
-                <span className="text-2xl mb-1 group-hover:scale-110 transition-transform">
-                  {mood.emoji}
-                </span>
+                <div className="w-12 h-12 mb-2 flex items-center justify-center group-hover:scale-110 transition-transform">
+                  <MoodIcon mood={mood.type} className="w-12 h-12" />
+                </div>
                 <span className="text-xs font-semibold text-[#2B231F]">
                   {mood.label}
                 </span>
@@ -203,41 +209,44 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           })}
         </div>
 
-        {moodLoggedNotice && (
-          <div className="p-2.5 rounded-xl bg-[#E8F2EB] text-[#4D7C5F] text-xs font-medium flex items-center justify-center space-x-2 animate-fade-in">
-            <CheckCircle2 className="w-4 h-4" />
-            <span>Noted with gentle care. Your daily mood has been kept.</span>
+        {todayMood && (
+          <div className="p-3.5 rounded-2xl bg-[#FAF0E8] border border-[#EAD7C8] flex flex-col sm:flex-row items-center justify-between gap-3 animate-fade-in">
+            <div className="flex items-center space-x-2.5 text-xs font-medium text-[#7A4B29]">
+              <div className="w-6 h-6 flex-shrink-0">
+                <MoodIcon mood={todayMood} className="w-6 h-6" showGlow={false} />
+              </div>
+              <span>Feeling <strong>{MOODS[todayMood]?.label}</strong> today. Ready to write?</span>
+            </div>
+            <button
+              id="home-write-with-mood-btn"
+              onClick={onGeneralWrite}
+              className="px-4 py-2 rounded-xl bg-[#C97C4C] hover:bg-[#B46A3B] text-[#FFFDF9] text-xs font-semibold transition-all shadow-xs flex items-center space-x-1.5 cursor-pointer self-stretch sm:self-auto justify-center"
+            >
+              <span>Write</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
           </div>
         )}
       </section>
 
       {/* Templates Section */}
       <section className="space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="font-display font-semibold text-xl text-[#2B231F]">
-              Choose a Template for Today
-            </h3>
-            <p className="text-xs text-[#7C7067] font-serif">
-              Structured questions to inspire gentle reflection, or open ivory paper.
-            </p>
-          </div>
-
-          <button
-            onClick={() => onSelectTemplate('freewrite')}
-            className="text-xs font-medium text-[#C97C4C] hover:text-[#B46A3B] flex items-center space-x-1 hover:underline"
-          >
-            <span>Open Blank Page</span>
-            <ChevronRight className="w-3.5 h-3.5" />
-          </button>
+        <div>
+          <h3 className="font-display font-semibold text-xl text-[#2B231F]">
+            Choose a Template for Today
+          </h3>
+          <p className="text-xs text-[#7C7067] font-serif">
+            Structured questions to inspire gentle reflection, or open ivory paper.
+          </p>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-4">
-          {JOURNAL_TEMPLATES.filter((tmpl) => tmpl.id !== 'freewrite').map((tmpl) => {
+          {JOURNAL_TEMPLATES.map((tmpl) => {
             const Icon = getTemplateIcon(tmpl.iconName);
             return (
               <div
                 key={tmpl.id}
+                id={`home-template-card-${tmpl.id}`}
                 onClick={() => onSelectTemplate(tmpl.id)}
                 className="p-5 rounded-2xl bg-[#FFFDF9] border border-[#E8DFC8] hover:border-[#C97C4C] hover:shadow-md transition-all cursor-pointer flex flex-col justify-between group space-y-3"
               >
@@ -266,44 +275,49 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         </div>
       </section>
 
-      {/* Snapshot: Latest Weekly Mirror & Recent Entries */}
+      {/* Snapshot: Insights & Recent Entries */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Weekly Mirror Snapshot */}
+        {/* Emotional Rhythm & Insights Snapshot */}
         <div className="bg-[#FFFDF9] border border-[#E8DFC8] rounded-3xl p-5 shadow-xs flex flex-col justify-between space-y-4">
           <div>
             <div className="flex items-center space-x-2 text-[#C97C4C] mb-2">
               <Sparkles className="w-4 h-4" />
-              <span className="text-xs font-semibold tracking-wider uppercase">Weekly Reflection Mirror</span>
+              <span className="text-xs font-semibold tracking-wider uppercase">Emotional Rhythm & Insights</span>
             </div>
             <h4 className="font-display font-semibold text-base text-[#2B231F]">
-              Your Recent Emotional Rhythm
+              Your Weekly Mood Flow
             </h4>
 
-            {latestWeeklyReflection ? (
-              <div className="mt-3 space-y-2">
-                <p className="text-xs text-[#594C44] font-serif italic line-clamp-3 bg-[#F9F5EC] p-3 rounded-xl border border-[#EAE1CF]">
-                  "{latestWeeklyReflection.moodTrendSummary}"
-                </p>
-                <div className="flex flex-wrap gap-1.5 pt-1">
-                  {latestWeeklyReflection.themes.slice(0, 2).map((t, idx) => (
-                    <span key={idx} className="text-[10px] px-2 py-0.5 rounded-md bg-[#EFE7D8] text-[#66574C]">
-                      {t}
-                    </span>
-                  ))}
-                </div>
+            <div className="mt-3 space-y-3">
+              <div className="flex items-center justify-between text-xs text-[#7C7067]">
+                <span>7-Day Activity</span>
+                <span className="font-semibold text-[#2B231F]">{streakCount} {streakCount === 1 ? 'day' : 'days'} streak</span>
               </div>
-            ) : (
-              <p className="text-xs text-[#7C7067] font-serif mt-2">
-                Write a few entries this week to allow Gemini to gently reflect your patterns back to you.
-              </p>
-            )}
+              <div className="grid grid-cols-7 gap-1.5 pt-1 text-center">
+                {past7Days.map((d, idx) => {
+                  const meta = d.mood ? MOODS[d.mood] : null;
+                  return (
+                    <div key={idx} className="flex flex-col items-center space-y-1">
+                      <div
+                        className={`w-7 h-7 rounded-xl flex items-center justify-center p-1 transition-transform ${
+                          meta ? 'shadow-2xs bg-[#FFF8EE] border border-[#EAE1CF]' : 'bg-[#EFE8D8] text-transparent'
+                        }`}
+                      >
+                        {d.mood ? <MoodIcon mood={d.mood} className="w-full h-full" showGlow={false} /> : <span>·</span>}
+                      </div>
+                      <span className="text-[9px] text-[#8C8075]">{d.dayName}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </div>
 
           <button
             onClick={onViewInsights}
             className="w-full py-2 px-3 rounded-xl bg-[#FAF0E8] hover:bg-[#F4E3D5] text-[#C97C4C] font-semibold text-xs transition-colors flex items-center justify-center space-x-1.5"
           >
-            <span>Open Insights & Weekly Mirror</span>
+            <span>Open Insights</span>
             <ArrowRight className="w-3.5 h-3.5" />
           </button>
         </div>
@@ -314,10 +328,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center space-x-2 text-[#4D7C5F]">
                 <BookOpen className="w-4 h-4" />
-                <span className="text-xs font-semibold tracking-wider uppercase">Recent Pages</span>
+                <span className="text-xs font-semibold tracking-wider uppercase">Recent Entries</span>
               </div>
               <button
-                onClick={onViewHistory}
+                onClick={onViewAllEntries || onViewHistory}
                 className="text-[11px] text-[#C97C4C] hover:underline"
               >
                 View all
@@ -327,7 +341,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             {recentEntries.length > 0 ? (
               <div className="space-y-2 mt-2">
                 {recentEntries.slice(0, 2).map((entry) => {
-                  const mood = MOODS[entry.mood];
                   return (
                     <div
                       key={entry.id}
@@ -336,7 +349,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                     >
                       <div className="overflow-hidden">
                         <div className="flex items-center space-x-1.5">
-                          <span>{mood?.emoji}</span>
+                          <div className="w-4 h-4 flex-shrink-0">
+                            <MoodIcon mood={entry.mood} className="w-4 h-4" showGlow={false} />
+                          </div>
                           <span className="text-xs font-semibold text-[#2B231F] truncate">
                             {entry.title || entry.templateTitle}
                           </span>
@@ -364,7 +379,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             className="w-full py-2 px-3 rounded-xl bg-[#EFE8D8] hover:bg-[#E5DAC8] text-[#2B231F] font-semibold text-xs transition-colors flex items-center justify-center space-x-1.5"
           >
             <CalendarIcon className="w-3.5 h-3.5 text-[#7C7067]" />
-            <span>Browse Past Entries</span>
+            <span>View History</span>
           </button>
         </div>
       </div>

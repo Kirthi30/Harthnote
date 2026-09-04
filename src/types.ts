@@ -22,7 +22,20 @@ export interface MoodMeta {
 
 export type AIMemoryLevel = 'none' | 'light' | 'deep';
 
-export type TemplateType = 'gratitude' | 'reflection' | 'goals' | 'freewrite' | 'clarity';
+export type WriteEntrySource = 'general_write' | 'template_selection' | 'blank_page' | 'direct';
+
+export type TemplateType = 
+  | 'blank'
+  | 'freewrite' 
+  | 'morning_intention' 
+  | 'evening_unwind' 
+  | 'decision_clarity' 
+  | 'gratitude_light' 
+  | 'tough_moment'
+  | 'gratitude' 
+  | 'reflection' 
+  | 'goals' 
+  | 'clarity';
 
 export interface TemplateQuestion {
   id: string;
@@ -54,6 +67,8 @@ export interface JournalEntry {
   wordCount: number;
   aiReflection?: string;
   aiReflectionDismissed?: boolean;
+  inspiredQuote?: string;
+  inspiredQuoteAuthor?: string;
   createdAt: number;
   updatedAt: number;
 }
@@ -120,3 +135,19 @@ export interface UserProfile {
 }
 
 export type AppView = 'home' | 'write' | 'history' | 'insights' | 'settings';
+
+export interface EmotionalMirrorAnalysis {
+  primaryFeeling: string;
+  primaryFeelingEmoji?: string;
+  primaryFeelingSummary: string;
+  feelingBreakdown: Array<{
+    feeling: string;
+    percentage: number;
+    insight: string;
+  }>;
+  recurringThemes: string[];
+  emotionalEvolution: string;
+  gentleEncouragement: string;
+  totalEntriesAnalyzed: number;
+  lastAnalyzedAt: number;
+}

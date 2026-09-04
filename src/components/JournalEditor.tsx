@@ -1,39 +1,62 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   ArrowLeft, 
   Sparkles, 
   Check, 
   HelpCircle, 
-  Flame, 
   Clock, 
   Save, 
   ChevronDown, 
   ChevronUp,
-  Smile,
-  Quote,
   Plus,
   RefreshCw,
-  Lightbulb,
-  X
+  Mic,
+  MicOff,
+  Globe,
+  AlertCircle,
+  X,
+  EyeOff,
+  Bold,
+  Italic,
+  Underline,
+  List,
+  ListOrdered,
+  Quote,
+  Minus,
+  BookOpen
 } from 'lucide-react';
-import type { JournalEntry, MoodType, TemplateType, UserProfile } from '../types';
-import { JOURNAL_TEMPLATES, MOODS } from '../data/templates';
+import type { JournalEntry, MoodType, TemplateType, UserProfile, WriteEntrySource } from '../types';
+import { JOURNAL_TEMPLATES, MOODS, getTemplateById } from '../data/templates';
+import { polishSpeechLocally } from '../utils/speechPolishEngine';
+import { SuggestedTemplateModal } from './SuggestedTemplateModal';
+import { getSuggestedTemplateForMood, MoodTemplateSuggestion } from '../data/moodTemplateMapping';
 
-const INSPIRED_PROMPTS = [
-  "What is one small, quiet moment from today that brought you a sense of ease?",
-  "If your mind were a room right now, what does it look like and what would make it feel cozier?",
-  "What is a thought or feeling you've been carrying quietly that needs room to breathe?",
-  "What is one unexpected kindness—given, received, or witnessed—that touched you recently?",
-  "What is a gentle truth or lesson this week has been nudging you to notice?",
-  "What can you give yourself full, compassionate permission to let go of today?",
-  "Where in your body or in your day did you feel most grounded and at home with yourself?",
-  "What is something simple you are genuinely looking forward to, no matter how small?",
+export const VOICE_LANGUAGES = [
+  { code: 'en-US', label: 'English (US)', flag: '🇺🇸' },
+  { code: 'en-GB', label: 'English (UK)', flag: '🇬🇧' },
+  { code: 'en-IN', label: 'English (India)', flag: '🇮🇳' },
+  { code: 'es-ES', label: 'Español (España)', flag: '🇪🇸' },
+  { code: 'es-MX', label: 'Español (México)', flag: '🇲🇽' },
+  { code: 'fr-FR', label: 'Français (France)', flag: '🇫🇷' },
+  { code: 'de-DE', label: 'Deutsch (Germany)', flag: '🇩🇪' },
+  { code: 'it-IT', label: 'Italiano (Italy)', flag: '🇮🇹' },
+  { code: 'pt-BR', label: 'Português (Brasil)', flag: '🇧🇷' },
+  { code: 'hi-IN', label: 'हिन्दी (Hindi)', flag: '🇮🇳' },
+  { code: 'ta-IN', label: 'தமிழ் (Tamil)', flag: '🇮🇳' },
+  { code: 'te-IN', label: 'తెలుగు (Telugu)', flag: '🇮🇳' },
+  { code: 'bn-IN', label: 'বাংলা (Bengali)', flag: '🇮🇳' },
+  { code: 'zh-CN', label: '中文 (Mandarin)', flag: '🇨🇳' },
+  { code: 'ja-JP', label: '日本語 (Japanese)', flag: '🇯🇵' },
+  { code: 'ko-KR', label: '한국어 (Korean)', flag: '🇰🇷' },
+  { code: 'ar-SA', label: 'العربية (Arabic)', flag: '🇸🇦' },
+  { code: 'ru-RU', label: 'Русский (Russian)', flag: '🇷🇺' },
 ];
 
 interface JournalEditorProps {
   initialTemplate?: TemplateType;
   initialEntry?: JournalEntry | null;
   initialMood?: MoodType | null;
+  entrySource?: WriteEntrySource;
   onMoodChange?: (mood: MoodType) => void;
   onSave: (entryData: {
     templateType: TemplateType;
@@ -54,12 +77,21 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
   initialTemplate = 'freewrite',
   initialEntry,
   initialMood,
+  entrySource = 'direct',
   onMoodChange,
   onSave,
   onCancel,
   isSaving,
+  userProfile,
 }) => {
-  const [templateId, setTemplateId] = useState<TemplateType>(initialEntry?.templateType || initialTemplate);
+  // Defensive privacy-safe default: AI features in the Write section are disabled unless explicitly allowed ('light' or 'deep')
+  const isAIPermitted = Boolean(
+    userProfile?.aiMemoryLevel && (userProfile.aiMemoryLevel === 'light' || userProfile.aiMemoryLevel === 'deep')
+  );
+
+  const [templateId, setTemplateId] = useState<TemplateType>(
+    initialEntry?.templateType || (entrySource === 'blank_page' ? 'blank' : initialTemplate)
+  );
   const [title, setTitle] = useState(initialEntry?.title || '');
   const [text, setText] = useState(initialEntry?.text || '');
   const [promptAnswers, setPromptAnswers] = useState<Record<string, string>>(initialEntry?.promptAnswers || {});
@@ -67,24 +99,143 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
   const [showPromptsHelper, setShowPromptsHelper] = useState(true);
   const [draftSavedTime, setDraftSavedTime] = useState<string | null>(null);
 
-  // Quote Generator State
-  const [generatedQuote, setGeneratedQuote] = useState<{ quote: string; author: string } | null>(null);
-  const [isGeneratingQuote, setIsGeneratingQuote] = useState(false);
-  const [quoteAdded, setQuoteAdded] = useState(false);
-
-  // Inspired Reflection Prompt State
-  const [currentInspiredPrompt, setCurrentInspiredPrompt] = useState<string | null>(null);
-
-  // Sync mood if initialEntry or initialMood updates
-  useEffect(() => {
-    if (initialEntry?.mood) {
-      setSelectedMood(initialEntry.mood);
-    } else if (initialMood) {
-      setSelectedMood(initialMood);
+  // Suggested-Template Popup State: ONLY triggered when user entered via General Write with a Home mood selected
+  const [suggestedModalData, setSuggestedModalData] = useState<MoodTemplateSuggestion | null>(() => {
+    if (entrySource === 'general_write' && initialMood && !initialEntry) {
+      return getSuggestedTemplateForMood(initialMood);
     }
-  }, [initialEntry?.mood, initialMood]);
+    return null;
+  });
 
-  const currentTemplate = JOURNAL_TEMPLATES.find((t) => t.id === templateId) || JOURNAL_TEMPLATES[4];
+  // Template Switching Confirmation State (protects entered prompt answers)
+  const [pendingTemplateId, setPendingTemplateId] = useState<TemplateType | null>(null);
+
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const handleUseSuggestedTemplate = (targetTemplateId: TemplateType) => {
+    setSuggestedModalData(null);
+    handleAttemptTemplateChange(targetTemplateId);
+  };
+
+  const handleSelectAnyTemplate = (targetTemplateId: TemplateType) => {
+    setSuggestedModalData(null);
+    handleAttemptTemplateChange(targetTemplateId);
+  };
+
+  const handleCloseSuggestionModal = () => {
+    setSuggestedModalData(null);
+  };
+
+  const handleAttemptTemplateChange = (newTemplateId: TemplateType) => {
+    if (newTemplateId === templateId) return;
+    const hasAnswers = Object.values(promptAnswers).some((ans) => ans && ans.trim().length > 0);
+    if (hasAnswers) {
+      setPendingTemplateId(newTemplateId);
+    } else {
+      setTemplateId(newTemplateId);
+    }
+  };
+
+  const handleConfirmTemplateSwitch = () => {
+    if (pendingTemplateId) {
+      setPromptAnswers({});
+      setTemplateId(pendingTemplateId);
+      setPendingTemplateId(null);
+    }
+  };
+
+  const handleCancelTemplateSwitch = () => {
+    setPendingTemplateId(null);
+  };
+
+  const insertFormatting = (prefix: string, suffix: string = '') => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const prevText = text;
+    const selectedText = prevText.substring(start, end);
+    const replacement = selectedText ? `${prefix}${selectedText}${suffix}` : `${prefix}${suffix}`;
+    const updatedText = prevText.substring(0, start) + replacement + prevText.substring(end);
+    setText(updatedText);
+    setTimeout(() => {
+      textarea.focus();
+      const newCursor = selectedText ? start + replacement.length : start + prefix.length;
+      textarea.setSelectionRange(newCursor, newCursor);
+    }, 0);
+  };
+
+  // In-Editor Suggested Reflection State (with Keep in Entry & Dismiss)
+  const [suggestedThought, setSuggestedThought] = useState<string>(
+    isAIPermitted && initialEntry?.aiReflection && !initialEntry.aiReflectionDismissed
+      ? initialEntry.aiReflection
+      : ''
+  );
+  const [isSuggestionDismissed, setIsSuggestionDismissed] = useState(false);
+  const [isThoughtKept, setIsThoughtKept] = useState(
+    Boolean(isAIPermitted && initialEntry?.aiReflection && initialEntry?.text.includes(initialEntry.aiReflection))
+  );
+  const [isLoadingThought, setIsLoadingThought] = useState(false);
+
+  // Dynamic reaction when privacy settings change
+  useEffect(() => {
+    if (!isAIPermitted) {
+      setSuggestedThought('');
+      setIsSuggestionDismissed(false);
+      setIsThoughtKept(false);
+    } else if (initialEntry?.aiReflection && !initialEntry.aiReflectionDismissed) {
+      setSuggestedThought(initialEntry.aiReflection);
+      setIsThoughtKept(Boolean(initialEntry?.text.includes(initialEntry.aiReflection)));
+    }
+  }, [isAIPermitted, initialEntry?.aiReflection, initialEntry?.aiReflectionDismissed, initialEntry?.text]);
+
+  // Multi-Language Voice Dictation State
+  const recognitionRef = useRef<any>(null);
+  const [isListening, setIsListening] = useState(false);
+  const [selectedVoiceLang, setSelectedVoiceLang] = useState('en-US');
+  const [showLangMenu, setShowLangMenu] = useState(false);
+  const [interimTranscript, setInterimTranscript] = useState('');
+  const [micError, setMicError] = useState<string | null>(null);
+
+  // Clean up speech recognition on unmount
+  useEffect(() => {
+    return () => {
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.abort();
+        } catch {
+          // ignore cleanup abort errors
+        }
+      }
+    };
+  }, []);
+
+  // Sync state if initialEntry, initialTemplate, entrySource, or initialMood updates
+  useEffect(() => {
+    if (initialEntry) {
+      setTemplateId(initialEntry.templateType || 'freewrite');
+      setTitle(initialEntry.title || '');
+      setText(initialEntry.text || '');
+      setPromptAnswers(initialEntry.promptAnswers || {});
+      setSelectedMood(initialEntry.mood || initialMood || 'calm');
+      setSuggestedModalData(null);
+    } else {
+      const targetTmpl = entrySource === 'blank_page' ? 'blank' : (initialTemplate || 'freewrite');
+      setTemplateId(targetTmpl);
+      setTitle('');
+      setText('');
+      setPromptAnswers({});
+      setSelectedMood(initialMood || 'calm');
+      if (entrySource === 'general_write' && initialMood) {
+        setSuggestedModalData(getSuggestedTemplateForMood(initialMood));
+      } else {
+        setSuggestedModalData(null);
+      }
+    }
+  }, [initialEntry, initialTemplate, entrySource, initialMood]);
+
+  const currentTemplate = getTemplateById(templateId);
+  const currentLang = VOICE_LANGUAGES.find((l) => l.code === selectedVoiceLang) || VOICE_LANGUAGES[0];
 
   // Calculate word count
   const countWords = (str: string) => {
@@ -112,61 +263,169 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
     }));
   };
 
-  const handleGenerateQuote = async () => {
-    setIsGeneratingQuote(true);
-    setQuoteAdded(false);
+  // Voice Dictation Controller
+  const toggleListening = () => {
+    if (isListening) {
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.stop();
+        } catch {
+          // ignore stop error
+        }
+      }
+      setIsListening(false);
+      setInterimTranscript('');
+      return;
+    }
+
+    const SpeechRecognitionClass = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognitionClass) {
+      setMicError("Voice dictation isn't supported in this browser. Please try Chrome, Edge, or Safari.");
+      return;
+    }
+
+    setMicError(null);
     try {
-      const res = await fetch('/api/gemini/generate-quote', {
+      const recognition = new SpeechRecognitionClass();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = selectedVoiceLang;
+
+      recognition.onstart = () => {
+        setIsListening(true);
+        setMicError(null);
+      };
+
+      recognition.onresult = (event: any) => {
+        let interim = '';
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          const transcriptPiece = event.results[i][0]?.transcript || '';
+          if (event.results[i].isFinal) {
+            const cleanFinal = transcriptPiece.trim();
+            if (cleanFinal) {
+              // In Pure Private Notebook mode (isAIPermitted === false), insert raw speech recognition directly without any AI speech polishing or rewriting
+              const textToAdd = isAIPermitted
+                ? (polishSpeechLocally(cleanFinal, selectedVoiceLang) || cleanFinal)
+                : cleanFinal;
+
+              // Convert detected voice and write the content directly into the notebook page
+              setText((prev) => {
+                if (!prev.trim()) return textToAdd;
+                const separator = prev.endsWith(' ') || prev.endsWith('\n') ? '' : ' ';
+                return prev + separator + textToAdd;
+              });
+            }
+          } else {
+            interim += transcriptPiece;
+          }
+        }
+        setInterimTranscript(interim);
+      };
+
+      recognition.onerror = (event: any) => {
+        console.warn('Speech recognition error:', event.error);
+        if (event.error === 'not-allowed') {
+          setMicError('Microphone access blocked. Please enable microphone permissions in your browser.');
+        } else if (event.error === 'network') {
+          setMicError('Speech recognition connection error. Please verify network connectivity.');
+        } else if (event.error !== 'no-speech') {
+          setMicError(`Voice error: ${event.error}`);
+        }
+        setIsListening(false);
+        setInterimTranscript('');
+      };
+
+      recognition.onend = () => {
+        setIsListening(false);
+        setInterimTranscript('');
+      };
+
+      recognitionRef.current = recognition;
+      recognition.start();
+    } catch (err: any) {
+      console.error('Failed to start speech recognition:', err);
+      setMicError('Microphone error: ' + (err?.message || 'Unable to access audio device.'));
+      setIsListening(false);
+    }
+  };
+
+  const handleSelectLanguage = (code: string) => {
+    setSelectedVoiceLang(code);
+    setShowLangMenu(false);
+    if (isListening && recognitionRef.current) {
+      recognitionRef.current.stop();
+      setTimeout(() => {
+        toggleListening();
+      }, 250);
+    }
+  };
+
+  const handleKeepThoughtInEntry = () => {
+    if (!suggestedThought.trim()) return;
+    const thoughtText = suggestedThought.trim();
+
+    setText((prev) => {
+      // Prevent duplication if clicked multiple times
+      if (prev.includes(thoughtText)) {
+        return prev;
+      }
+      const formatted = `\n\nGentle Reflection:\n"${thoughtText}"`;
+      if (!prev.trim()) {
+        return `Gentle Reflection:\n"${thoughtText}"`;
+      }
+      return prev.trimEnd() + formatted;
+    });
+    setIsThoughtKept(true);
+    setIsSuggestionDismissed(false);
+  };
+
+  const handleDismissThought = () => {
+    setIsSuggestionDismissed(true);
+  };
+
+  const handleRequestReflection = async () => {
+    // Guard against unauthorized AI processing in Pure Private Notebook mode
+    if (!isAIPermitted) return;
+    if (!text.trim() && Object.keys(promptAnswers).length === 0) return;
+    setIsLoadingThought(true);
+    try {
+      const resp = await fetch('/api/gemini/reflect-entry', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           entryText: text,
+          templateTitle: currentTemplate.title,
           mood: selectedMood,
           promptAnswers,
+          aiMemoryLevel: userProfile?.aiMemoryLevel || 'light',
         }),
       });
-      const data = await res.json();
-      if (data.quote) {
-        setGeneratedQuote({ quote: data.quote, author: data.author || 'Journal Companion' });
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data.reflection) {
+          setSuggestedThought(data.reflection);
+          setIsSuggestionDismissed(false);
+          setIsThoughtKept(text.includes(data.reflection));
+        }
       }
     } catch (err) {
-      console.error('Quote generation error:', err);
-      setGeneratedQuote({
-        quote: 'In the quiet stream of your own thoughts, truth finds its natural voice.',
-        author: 'Hearthnote Reflection',
-      });
+      console.warn('In-editor reflection fetch error:', err);
     } finally {
-      setIsGeneratingQuote(false);
-    }
-  };
-
-  const handleAddQuoteToJournal = () => {
-    if (!generatedQuote) return;
-    const quoteBlock = `\n\n> "${generatedQuote.quote}"\n— ${generatedQuote.author}`;
-    setText((prev) => (prev ? prev + quoteBlock : quoteBlock.trim()));
-    setQuoteAdded(true);
-  };
-
-  const handleGetInspired = () => {
-    let pool = INSPIRED_PROMPTS;
-    if (currentInspiredPrompt) {
-      pool = INSPIRED_PROMPTS.filter((p) => p !== currentInspiredPrompt);
-    }
-    const randomPrompt = pool[Math.floor(Math.random() * pool.length)];
-    setCurrentInspiredPrompt(randomPrompt);
-  };
-
-  const handleInsertInspiredPrompt = () => {
-    if (!currentInspiredPrompt) return;
-    const promptFormatted = `\n\n> *Prompt: ${currentInspiredPrompt}*\n\n`;
-    if (!text.trim()) {
-      setText(`> *Prompt: ${currentInspiredPrompt}*\n\n`);
-    } else {
-      setText((prev) => `${prev.trim()}${promptFormatted}`);
+      setIsLoadingThought(false);
     }
   };
 
   const handleSave = async () => {
+    // If voice recording is still active, stop it before preserving
+    if (isListening && recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch {
+        // ignore
+      }
+      setIsListening(false);
+    }
+
     let combinedText = text.trim();
     
     // If user answered questions, append or combine if main text is empty
@@ -179,10 +438,15 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
         .join('\n\n');
     }
 
+    const isBlank = templateId === 'blank';
+    const fallbackTitle = isBlank
+      ? `Journal Entry — ${new Date().toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`
+      : `${currentTemplate.title} — ${new Date().toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`;
+
     await onSave({
       templateType: templateId,
-      templateTitle: currentTemplate.title,
-      title: title.trim() || `${currentTemplate.title} — ${new Date().toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`,
+      templateTitle: isBlank ? 'Blank Page' : currentTemplate.title,
+      title: title.trim() || fallbackTitle,
       text: combinedText || 'A quiet moment of reflection.',
       promptAnswers,
       mood: selectedMood,
@@ -200,28 +464,129 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
           className="inline-flex items-center space-x-1.5 text-xs font-medium text-[#7C7067] hover:text-[#2B231F] px-2.5 py-1.5 rounded-lg hover:bg-[#EAE1CF] transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
-          <span>Back to Notebook</span>
+          <span>Back to History</span>
         </button>
 
-        <div className="flex items-center space-x-3">
+        {/* Top Right Corner Controls: Draft status, Voice Dictation Mic, and Save Button */}
+        <div className="flex items-center space-x-2 sm:space-x-3">
           {draftSavedTime && (
-            <span className="text-[11px] text-[#8C8075] flex items-center space-x-1">
+            <span className="text-[11px] text-[#8C8075] hidden md:flex items-center space-x-1">
               <Clock className="w-3 h-3 text-[#4D7C5F]" />
               <span>Draft kept {draftSavedTime}</span>
             </span>
           )}
 
+          {/* In-Editor Gentle Reflection Trigger - Only visible when AI is explicitly permitted */}
+          {isAIPermitted && (
+            <button
+              type="button"
+              onClick={handleRequestReflection}
+              disabled={isLoadingThought || (!text.trim() && Object.keys(promptAnswers).length === 0)}
+              className="px-3 py-2 rounded-xl bg-[#FAF3E6] border border-[#E0D4BE] hover:bg-[#EAE0CD] text-[#C97C4C] text-xs font-semibold flex items-center space-x-1.5 transition-colors cursor-pointer disabled:opacity-50"
+              title="Receive a gentle reflection or guiding thought based on your current writing"
+            >
+              <Sparkles className={`w-3.5 h-3.5 ${isLoadingThought ? 'animate-spin' : ''}`} />
+              <span className="hidden sm:inline">{isLoadingThought ? 'Reflecting...' : 'Reflect'}</span>
+            </button>
+          )}
+
+          {/* Voice Mic Button with Multi-Language Support at Top Right Corner */}
+          <div className="flex items-center relative">
+            <button
+              id="voice-dictation-mic-btn"
+              type="button"
+              onClick={toggleListening}
+              title={isListening ? 'Click to stop voice recording' : `Click to dictate into notebook page in ${currentLang.label}`}
+              className={`px-3 py-2 rounded-l-xl text-xs font-semibold flex items-center space-x-1.5 transition-all shadow-xs cursor-pointer ${
+                isListening
+                  ? 'bg-[#DC2626] text-[#FFFDF9] ring-2 ring-[#DC2626]/40 animate-pulse'
+                  : 'bg-[#FAF3E6] border border-r-0 border-[#E0D4BE] text-[#2B231F] hover:bg-[#EAE0CD]'
+              }`}
+            >
+              {isListening ? (
+                <>
+                  <MicOff className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Listening...</span>
+                </>
+              ) : (
+                <>
+                  <Mic className="w-3.5 h-3.5 text-[#C97C4C]" />
+                  <span className="hidden sm:inline">Mic</span>
+                </>
+              )}
+            </button>
+
+            {/* Language Selector Dropdown Toggle */}
+            <button
+              id="voice-language-selector-btn"
+              type="button"
+              onClick={() => setShowLangMenu(!showLangMenu)}
+              className="px-2 py-2 rounded-r-xl bg-[#FAF3E6] border border-[#E0D4BE] text-[#2B231F] text-xs hover:bg-[#EAE0CD] flex items-center space-x-1 transition-colors cursor-pointer"
+              title={`Voice Language: ${currentLang.label}. Click to switch language.`}
+            >
+              <span className="text-xs">{currentLang.flag}</span>
+              <ChevronDown className="w-3 h-3 text-[#7C7067]" />
+            </button>
+
+            {/* Multi-Language Dropdown Menu */}
+            {showLangMenu && (
+              <div className="absolute top-full right-0 mt-2 w-60 bg-[#FFFDF9] border border-[#E4DAC3] rounded-2xl shadow-xl z-50 p-2 space-y-1 max-h-72 overflow-y-auto">
+                <div className="text-[10px] font-bold text-[#8C8075] uppercase tracking-wider px-2.5 py-1 flex items-center justify-between">
+                  <span>Dictation Language</span>
+                  <Globe className="w-3 h-3 text-[#C97C4C]" />
+                </div>
+                {VOICE_LANGUAGES.map((lang) => (
+                  <button
+                    key={lang.code}
+                    type="button"
+                    onClick={() => handleSelectLanguage(lang.code)}
+                    className={`w-full text-left px-2.5 py-1.5 rounded-xl text-xs flex items-center justify-between transition-colors cursor-pointer ${
+                      selectedVoiceLang === lang.code
+                        ? 'bg-[#FAF0E8] text-[#C97C4C] font-bold'
+                        : 'text-[#2B231F] hover:bg-[#FAF6EE]'
+                    }`}
+                  >
+                    <span className="flex items-center space-x-2">
+                      <span>{lang.flag}</span>
+                      <span>{lang.label}</span>
+                    </span>
+                    {selectedVoiceLang === lang.code && (
+                      <Check className="w-3.5 h-3.5 text-[#C97C4C]" />
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
           <button
             id="close-save-entry-btn"
             onClick={handleSave}
             disabled={isSaving}
-            className="px-5 py-2 rounded-xl bg-[#C97C4C] hover:bg-[#B46A3B] text-[#FFFDF9] font-medium text-xs shadow-xs transition-all flex items-center space-x-2 disabled:opacity-60"
+            className="px-4 sm:px-5 py-2 rounded-xl bg-[#C97C4C] hover:bg-[#B46A3B] text-[#FFFDF9] font-medium text-xs shadow-xs transition-all flex items-center space-x-2 disabled:opacity-60 cursor-pointer"
           >
             <Save className="w-3.5 h-3.5" />
             <span>{isSaving ? 'Preserving...' : 'Close & Save Entry'}</span>
           </button>
         </div>
       </div>
+
+      {/* Mic Error Notice if any */}
+      {micError && (
+        <div className="bg-[#FEF2F2] border border-[#FECACA] rounded-2xl p-3 px-4 text-xs text-[#991B1B] flex items-center justify-between animate-fade-in">
+          <div className="flex items-center space-x-2">
+            <AlertCircle className="w-4 h-4 text-[#DC2626] flex-shrink-0" />
+            <span>{micError}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setMicError(null)}
+            className="text-[#991B1B] hover:text-[#DC2626] p-1"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
 
       {/* Main Notebook Surface Card */}
       <div className="bg-[#FFFDF9] border border-[#E4DAC3] rounded-3xl p-6 sm:p-9 shadow-sm space-y-6 relative overflow-hidden">
@@ -233,10 +598,12 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
           <div className="flex items-center space-x-2">
             <span className="text-xs font-semibold text-[#8C8075]">Template:</span>
             <select
+              id="write-template-selector"
               value={templateId}
-              onChange={(e) => setTemplateId(e.target.value as TemplateType)}
+              onChange={(e) => handleAttemptTemplateChange(e.target.value as TemplateType)}
               className="text-xs font-semibold text-[#2B231F] bg-[#FAF3E6] border border-[#E0D4BE] rounded-lg px-2.5 py-1.5 focus:outline-hidden focus:ring-1 focus:ring-[#C97C4C] cursor-pointer"
             >
+              <option value="blank">Blank Page (No Template)</option>
               {JOURNAL_TEMPLATES.map((t) => (
                 <option key={t.id} value={t.id}>
                   {t.title}
@@ -245,35 +612,10 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
             </select>
           </div>
 
-          {/* In-Editor Mood Selector */}
-          <div className="flex flex-wrap items-center gap-1.5 bg-[#FAF6EE] p-1.5 rounded-xl border border-[#EAE1CF]">
-            <span className="text-[11px] font-medium text-[#7C7067] px-2 flex items-center space-x-1">
-              <Smile className="w-3 h-3" />
-              <span>Mood:</span>
+          <div className="flex items-center space-x-3 text-xs text-[#8C8075]">
+            <span className="font-serif">
+              {totalWords} {totalWords === 1 ? 'word' : 'words'}
             </span>
-            {(Object.keys(MOODS) as MoodType[]).map((mKey) => {
-              const m = MOODS[mKey];
-              const isSelected = selectedMood === mKey;
-              return (
-                <button
-                  key={mKey}
-                  type="button"
-                  onClick={() => {
-                    setSelectedMood(mKey);
-                    if (onMoodChange) onMoodChange(mKey);
-                  }}
-                  title={`${m.label}: ${m.description}`}
-                  className={`px-2 py-1 rounded-lg text-xs transition-all ${
-                    isSelected
-                      ? 'bg-[#C97C4C] text-[#FFFDF9] font-bold shadow-xs'
-                      : 'hover:bg-[#EFE8D8] text-[#594C44]'
-                  }`}
-                >
-                  <span className="mr-0.5">{m.emoji}</span>
-                  <span className="hidden sm:inline text-[11px]">{m.label}</span>
-                </button>
-              );
-            })}
           </div>
         </div>
 
@@ -285,7 +627,7 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
               className="flex items-center justify-between cursor-pointer text-[#6B5A4E] select-none"
             >
               <div className="flex items-center space-x-2">
-                <Sparkles className="w-4 h-4 text-[#C97C4C]" />
+                <HelpCircle className="w-4 h-4 text-[#C97C4C]" />
                 <span className="text-xs font-semibold uppercase tracking-wider text-[#C97C4C]">
                   Guiding Questions for {currentTemplate.title}
                 </span>
@@ -317,131 +659,192 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
         )}
 
         {/* Entry Title */}
-        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2.5">
-          <div className="space-y-1 flex-1">
-            <input
-              type="text"
-              placeholder={currentTemplate.starterPrompt}
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className="w-full font-display text-xl sm:text-2xl font-semibold text-[#2B231F] placeholder:text-[#B4A79A] border-none bg-transparent focus:outline-hidden px-0"
-            />
-            <div className="text-[11px] text-[#8C8075] font-serif">
-              {new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
-            </div>
+        <div className="space-y-1">
+          <input
+            type="text"
+            placeholder={currentTemplate.starterPrompt}
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            className="w-full font-display text-xl sm:text-2xl font-semibold text-[#2B231F] placeholder:text-[#B4A79A] border-none bg-transparent focus:outline-hidden px-0"
+          />
+          <div className="text-[11px] text-[#8C8075] font-serif">
+            {new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
           </div>
-
-          <button
-            type="button"
-            onClick={handleGetInspired}
-            className="self-start sm:self-auto px-3.5 py-1.5 rounded-xl bg-[#FAF0E8] hover:bg-[#F2E5D8] text-[#C97C4C] border border-[#F0D5BE] text-xs font-semibold flex items-center space-x-1.5 transition-colors cursor-pointer shadow-2xs flex-shrink-0"
-            title="Generate a gentle writing prompt to overcome writer's block"
-          >
-            <Lightbulb className="w-3.5 h-3.5 text-[#C97C4C]" />
-            <span>Get Inspired</span>
-          </button>
         </div>
 
-        {/* Inspired Prompt Card when active */}
-        {currentInspiredPrompt && (
-          <div className="p-4 rounded-2xl bg-[#FAF0E8] border border-[#F0D5BE] space-y-2.5 animate-fade-in">
+        {/* Live Voice Dictation Active Banner & Transcription Status */}
+        {isListening && (
+          <div className="bg-[#FAF0E8] border border-[#EAD7C8] rounded-2xl p-3 sm:p-4 space-y-2 animate-fade-in">
             <div className="flex items-center justify-between">
-              <div className="text-xs font-semibold text-[#8C522A] flex items-center space-x-1.5 uppercase tracking-wider">
-                <Lightbulb className="w-4 h-4 text-[#C97C4C]" />
-                <span>Gentle Reflection Prompt</span>
+              <div className="flex items-center space-x-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-[#DC2626] animate-ping" />
+                <span className="text-xs font-bold text-[#C97C4C]">
+                  Voice Dictation Active ({currentLang.flag} {currentLang.label})
+                </span>
               </div>
               <button
                 type="button"
-                onClick={() => setCurrentInspiredPrompt(null)}
-                className="text-[#A3978C] hover:text-[#2B231F] text-xs cursor-pointer p-1"
-                aria-label="Close prompt"
+                onClick={toggleListening}
+                className="text-xs font-semibold text-[#DC2626] hover:underline cursor-pointer"
               >
-                <X className="w-3.5 h-3.5" />
+                Stop Listening
               </button>
             </div>
-            <p className="text-xs sm:text-sm font-serif font-medium text-[#2B231F] leading-relaxed italic">
-              "{currentInspiredPrompt}"
+            <p className="text-xs font-serif italic text-[#4A3F39]">
+              {interimTranscript ? (
+                <span>Hearing: "{interimTranscript}"</span>
+              ) : (
+                <span className="text-[#8C8075]">Speak in {currentLang.label}. Your spoken words are converted to text directly on the page...</span>
+              )}
             </p>
-            <div className="flex items-center space-x-2 pt-1">
+          </div>
+        )}
+
+        {/* Suggested Thought & Reflection Flow in Write Section - Only rendered when AI is explicitly permitted */}
+        {isAIPermitted && suggestedThought && !isSuggestionDismissed && (
+          <div className="bg-[#FAF0E8]/75 border border-[#EAD7C8] rounded-2xl p-4 sm:p-5 space-y-2.5 animate-fade-in">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2 text-[#C97C4C]">
+                <Sparkles className="w-4 h-4" />
+                <span className="text-xs font-semibold uppercase tracking-wider">
+                  Gentle Thought & Reflection
+                </span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <button
+                  type="button"
+                  onClick={handleDismissThought}
+                  className="px-2.5 py-1 rounded-lg hover:bg-[#EFE5D8] text-[#7C7067] text-xs flex items-center space-x-1 transition-colors cursor-pointer"
+                  title="Dismiss suggestion without breaking the entry or preventing manual edits"
+                >
+                  <EyeOff className="w-3 h-3" />
+                  <span>Dismiss</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleKeepThoughtInEntry}
+                  className={`px-3 py-1 rounded-lg text-xs font-medium flex items-center space-x-1 transition-colors shadow-xs cursor-pointer ${
+                    isThoughtKept
+                      ? 'bg-[#4D7C5F] text-[#FFFDF9]'
+                      : 'bg-[#C97C4C] hover:bg-[#B46A3B] text-[#FFFDF9]'
+                  }`}
+                >
+                  <Check className="w-3 h-3" />
+                  <span>{isThoughtKept ? 'Kept in Entry' : 'Keep in Entry'}</span>
+                </button>
+              </div>
+            </div>
+            <p className="font-serif italic text-sm sm:text-base text-[#2B231F] leading-relaxed">
+              "{suggestedThought}"
+            </p>
+          </div>
+        )}
+
+        {/* Dismissed Suggestion State - Only rendered when AI is explicitly permitted */}
+        {isAIPermitted && suggestedThought && isSuggestionDismissed && (
+          <div className="bg-[#FAF5EC] border border-[#EFE7D8] rounded-2xl p-3 flex items-center justify-between text-xs text-[#7C7067] animate-fade-in">
+            <div className="flex items-center space-x-2">
+              <EyeOff className="w-3.5 h-3.5 text-[#8C8075]" />
+              <span className="font-serif italic">1 gentle thought hidden for this view</span>
+            </div>
+            <div className="flex items-center space-x-2">
               <button
                 type="button"
-                onClick={handleInsertInspiredPrompt}
-                className="px-3 py-1.5 rounded-xl bg-[#C97C4C] hover:bg-[#B46A3B] text-white text-xs font-semibold flex items-center space-x-1 transition-colors cursor-pointer shadow-2xs"
+                onClick={() => setIsSuggestionDismissed(false)}
+                className="text-xs text-[#7C7067] hover:text-[#2B231F] underline cursor-pointer"
               >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Insert Prompt into Page</span>
+                Review
               </button>
               <button
                 type="button"
-                onClick={handleGetInspired}
-                className="px-3 py-1.5 rounded-xl bg-[#FFFDF9] hover:bg-[#F4ECE1] text-[#7C7067] hover:text-[#2B231F] border border-[#E8DFC8] text-xs font-semibold transition-colors cursor-pointer"
+                onClick={handleKeepThoughtInEntry}
+                className="px-2.5 py-1 rounded-lg bg-[#C97C4C] hover:bg-[#B46A3B] text-[#FFFDF9] font-medium flex items-center space-x-1 shadow-xs transition-colors cursor-pointer"
               >
-                <span>Another Prompt</span>
+                <Check className="w-3 h-3" />
+                <span>Keep in Entry</span>
               </button>
             </div>
           </div>
         )}
 
+        {/* Mobile-Responsive Formatting Toolbar (< 380px horizontal scroll supported via no-scrollbar) */}
+        <div className="w-full overflow-x-auto no-scrollbar scroll-smooth py-1 px-0.5 flex items-center space-x-1.5 border-b border-[#EFE7D8] flex-nowrap whitespace-nowrap touch-pan-x">
+          <button
+            type="button"
+            onClick={() => insertFormatting('**', '**')}
+            title="Bold (**text**)"
+            className="h-8 px-2.5 rounded-lg bg-[#FAF6EE] hover:bg-[#F0E6D5] text-[#2B231F] text-xs font-bold border border-[#EAE1CF] flex items-center space-x-1 flex-shrink-0 transition-colors cursor-pointer"
+          >
+            <Bold className="w-3.5 h-3.5" />
+            <span className="text-[11px]">Bold</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => insertFormatting('*', '*')}
+            title="Italic (*text*)"
+            className="h-8 px-2.5 rounded-lg bg-[#FAF6EE] hover:bg-[#F0E6D5] text-[#2B231F] text-xs italic border border-[#EAE1CF] flex items-center space-x-1 flex-shrink-0 transition-colors cursor-pointer"
+          >
+            <Italic className="w-3.5 h-3.5" />
+            <span className="text-[11px]">Italic</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => insertFormatting('<u>', '</u>')}
+            title="Underline (<u>text</u>)"
+            className="h-8 px-2.5 rounded-lg bg-[#FAF6EE] hover:bg-[#F0E6D5] text-[#2B231F] text-xs underline border border-[#EAE1CF] flex items-center space-x-1 flex-shrink-0 transition-colors cursor-pointer"
+          >
+            <Underline className="w-3.5 h-3.5" />
+            <span className="text-[11px]">Underline</span>
+          </button>
+          <div className="h-4 w-[1px] bg-[#E0D5C0] flex-shrink-0 mx-0.5" />
+          <button
+            type="button"
+            onClick={() => insertFormatting('- ')}
+            title="Bullet List (- item)"
+            className="h-8 px-2.5 rounded-lg bg-[#FAF6EE] hover:bg-[#F0E6D5] text-[#2B231F] text-xs border border-[#EAE1CF] flex items-center space-x-1 flex-shrink-0 transition-colors cursor-pointer"
+          >
+            <List className="w-3.5 h-3.5" />
+            <span className="text-[11px]">List</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => insertFormatting('1. ')}
+            title="Numbered List (1. item)"
+            className="h-8 px-2.5 rounded-lg bg-[#FAF6EE] hover:bg-[#F0E6D5] text-[#2B231F] text-xs border border-[#EAE1CF] flex items-center space-x-1 flex-shrink-0 transition-colors cursor-pointer"
+          >
+            <ListOrdered className="w-3.5 h-3.5" />
+            <span className="text-[11px]">Numbered</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => insertFormatting('> ')}
+            title="Blockquote (> quote)"
+            className="h-8 px-2.5 rounded-lg bg-[#FAF6EE] hover:bg-[#F0E6D5] text-[#2B231F] text-xs border border-[#EAE1CF] flex items-center space-x-1 flex-shrink-0 transition-colors cursor-pointer"
+          >
+            <Quote className="w-3.5 h-3.5" />
+            <span className="text-[11px]">Quote</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => insertFormatting('\n---\n')}
+            title="Horizontal Divider (---)"
+            className="h-8 px-2.5 rounded-lg bg-[#FAF6EE] hover:bg-[#F0E6D5] text-[#2B231F] text-xs border border-[#EAE1CF] flex items-center space-x-1 flex-shrink-0 transition-colors cursor-pointer"
+          >
+            <Minus className="w-3.5 h-3.5" />
+            <span className="text-[11px]">Divider</span>
+          </button>
+        </div>
+
         {/* Writing Surface / Freeform Text Area */}
         <div className="relative">
           <textarea
+            ref={textareaRef}
             rows={12}
             value={text}
             onChange={(e) => setText(e.target.value)}
-            placeholder="Write your thoughts freely here. No rushing, no rules..."
+            placeholder={`Write your thoughts freely here, or click the mic button at the top right corner to dictate in ${currentLang.label}...`}
             className="w-full notebook-lines font-serif text-base text-[#2B231F] placeholder:text-[#A89C8F] border-none bg-transparent focus:outline-hidden resize-y leading-7 selection:bg-[#C97C4C]/25"
           />
-        </div>
-
-        {/* AI Inspired Quote Generator Section */}
-        <div className="bg-[#FAF4E8] border border-[#E8DFC8] rounded-2xl p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2 text-[#C97C4C]">
-              <Quote className="w-4 h-4" />
-              <span className="text-xs font-semibold uppercase tracking-wider">
-                Content-Inspired Quote
-              </span>
-            </div>
-
-            <button
-              type="button"
-              onClick={handleGenerateQuote}
-              disabled={isGeneratingQuote}
-              className="px-3 py-1.5 rounded-xl bg-[#FAF0E8] hover:bg-[#F4E3D5] text-[#C97C4C] text-xs font-semibold transition-all flex items-center space-x-1.5 cursor-pointer disabled:opacity-50"
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>{isGeneratingQuote ? 'Generating...' : generatedQuote ? 'Refresh Quote' : 'Generate Quote from Writing'}</span>
-            </button>
-          </div>
-
-          {generatedQuote && (
-            <div className="p-3.5 rounded-xl bg-[#FFFDF9] border border-[#EAE1CF] space-y-2.5 animate-fade-in">
-              <p className="text-xs font-serif italic text-[#2B231F] leading-relaxed">
-                "{generatedQuote.quote}"
-              </p>
-              <div className="flex items-center justify-between text-[11px] pt-1">
-                <span className="text-[#8C8075] font-serif">— {generatedQuote.author}</span>
-                <button
-                  type="button"
-                  onClick={handleAddQuoteToJournal}
-                  disabled={quoteAdded}
-                  className="px-3 py-1 rounded-lg bg-[#C97C4C] hover:bg-[#B46A3B] text-[#FFFDF9] font-medium text-xs transition-colors flex items-center space-x-1 disabled:bg-[#4D7C5F] disabled:cursor-default"
-                >
-                  {quoteAdded ? (
-                    <>
-                      <Check className="w-3 h-3" />
-                      <span>Added into Journal</span>
-                    </>
-                  ) : (
-                    <>
-                      <Plus className="w-3 h-3" />
-                      <span>Add Quote into Journal</span>
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Bottom Info Bar */}
@@ -454,6 +857,49 @@ export const JournalEditor: React.FC<JournalEditorProps> = ({
           </span>
         </div>
       </div>
+
+      {/* Template Switch Confirmation Dialog (Protects Typed Prompt Answers) */}
+      {pendingTemplateId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-fade-in">
+          <div className="bg-[#FFFDF9] border border-[#E8DFC8] rounded-3xl p-6 sm:p-7 max-w-md w-full shadow-xl space-y-4">
+            <div className="flex items-center space-x-2.5 text-[#C97C4C]">
+              <AlertCircle className="w-5 h-5 text-[#C97C4C] flex-shrink-0" />
+              <h4 className="font-display font-semibold text-lg text-[#2B231F]">
+                Switch template?
+              </h4>
+            </div>
+            <p className="text-xs sm:text-sm text-[#6B5A4E] font-serif leading-relaxed">
+              Switching templates will clear your current prompt answers. Do you want to keep your current template or switch?
+            </p>
+            <div className="grid grid-cols-2 gap-3 pt-2">
+              <button
+                type="button"
+                onClick={handleCancelTemplateSwitch}
+                className="w-full py-2.5 px-4 rounded-xl bg-[#EFE8D8] hover:bg-[#E5DAC8] text-[#2B231F] text-xs font-semibold transition-colors cursor-pointer"
+              >
+                Keep Current Template
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmTemplateSwitch}
+                className="w-full py-2.5 px-4 rounded-xl bg-[#C97C4C] hover:bg-[#B46A3B] text-[#FFFDF9] text-xs font-semibold transition-colors shadow-xs cursor-pointer"
+              >
+                Switch Template
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Suggested Template Recommendation Popup */}
+      {suggestedModalData && (
+        <SuggestedTemplateModal
+          suggestion={suggestedModalData}
+          onUseSuggestedTemplate={handleUseSuggestedTemplate}
+          onSelectAnyTemplate={handleSelectAnyTemplate}
+          onClose={handleCloseSuggestionModal}
+        />
+      )}
     </div>
   );
 };

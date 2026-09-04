@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import type { JournalEntry, MoodType, TemplateType } from '../types';
 import { JOURNAL_TEMPLATES, MOODS } from '../data/templates';
+import { MoodIcon } from './MoodIcon';
 
 interface HistoryScreenProps {
   entries: JournalEntry[];
@@ -98,10 +99,10 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#E8DFC8] pb-5">
         <div>
           <h2 className="font-display text-3xl font-semibold text-[#2B231F]">
-            Notebook History
+            History
           </h2>
           <p className="text-xs text-[#7C7067] font-serif mt-1">
-            {entries.length} {entries.length === 1 ? 'reflection page' : 'reflection pages'} recorded
+            {entries.length} {entries.length === 1 ? 'journal entry' : 'journal entries'} recorded
           </p>
         </div>
 
@@ -229,7 +230,9 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({
                 >
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                     <div className="flex items-center space-x-2">
-                      <span className="text-base">{moodMeta?.emoji}</span>
+                      <div className="w-5 h-5 flex-shrink-0">
+                        <MoodIcon mood={entry.mood} className="w-5 h-5" showGlow={false} />
+                      </div>
                       <span className="text-xs font-semibold text-[#8C8075]">
                         {entry.templateTitle}
                       </span>
@@ -334,7 +337,9 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({
                         {dayNum}
                       </span>
                       {hasEntries && (
-                        <span className="text-[10px]">{MOODS[dayEntries[0].mood]?.emoji}</span>
+                        <div className="w-4 h-4 flex-shrink-0">
+                          <MoodIcon mood={dayEntries[0].mood} className="w-4 h-4" showGlow={false} />
+                        </div>
                       )}
                     </div>
 
@@ -379,7 +384,9 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({
                   >
                     <div>
                       <div className="flex items-center space-x-2">
-                        <span>{MOODS[entry.mood]?.emoji}</span>
+                        <div className="w-4 h-4 flex-shrink-0">
+                          <MoodIcon mood={entry.mood} className="w-4 h-4" showGlow={false} />
+                        </div>
                         <span className="text-xs font-semibold text-[#2B231F]">
                           {entry.title || entry.templateTitle}
                         </span>

@@ -93,10 +93,120 @@ export const MOODS: Record<MoodType, MoodMeta> = {
   },
 };
 
+export const normalizeTemplateId = (id?: string | null): TemplateType => {
+  if (!id) return 'freewrite';
+  if (id === 'blank') return 'blank';
+  if (id === 'gratitude' || id === 'gratitude_light') return 'gratitude_light';
+  if (id === 'reflection' || id === 'evening_unwind') return 'evening_unwind';
+  if (id === 'goals' || id === 'morning_intention') return 'morning_intention';
+  if (id === 'clarity' || id === 'decision_clarity') return 'decision_clarity';
+  if (id === 'tough_moment') return 'tough_moment';
+  return 'freewrite';
+};
+
+export const BLANK_PAGE_TEMPLATE: JournalTemplate = {
+  id: 'blank',
+  title: 'Blank Page',
+  subtitle: 'A completely open, unguided page for pure unfiltered writing.',
+  iconName: 'FileText',
+  color: '#5C544E',
+  accentBg: '#F5F1EB',
+  starterPrompt: 'Title (optional)',
+  questions: [],
+};
+
 export const JOURNAL_TEMPLATES: JournalTemplate[] = [
   {
-    id: 'gratitude',
-    title: 'Gratitude & Small Joys',
+    id: 'freewrite',
+    title: 'Freewrite',
+    subtitle: 'Unfiltered, open stream of consciousness without rules.',
+    iconName: 'PenTool',
+    color: '#5C544E',
+    accentBg: '#F5F1EB',
+    starterPrompt: 'Writing freely without editing or judging my thoughts...',
+    questions: [],
+  },
+  {
+    id: 'morning_intention',
+    title: 'Morning Intention',
+    subtitle: 'Set a peaceful, deliberate tone before the day begins.',
+    iconName: 'Compass',
+    color: '#4D7C5F',
+    accentBg: '#EAF3EC',
+    starterPrompt: 'Instead of an overwhelming to-do list, my intention is...',
+    questions: [
+      {
+        id: 'q1',
+        label: 'How do you hope to feel in your body & mind today?',
+        placeholder: 'Unhurried, focused, steady, curious, well-rested...',
+      },
+      {
+        id: 'q2',
+        label: 'What is the single most caring priority to attend to?',
+        placeholder: 'One concrete task, conversation, or boundary that matters most...',
+      },
+      {
+        id: 'q3',
+        label: 'What small boundary or pause will you protect today?',
+        placeholder: 'Stepping outside at noon, leaving work on time, putting phone away...',
+      },
+    ],
+  },
+  {
+    id: 'evening_unwind',
+    title: 'Evening Unwind',
+    subtitle: 'Release the day’s noise and mark what truly mattered.',
+    iconName: 'Moon',
+    color: '#806857',
+    accentBg: '#F3EFEA',
+    starterPrompt: 'As the day settles down, my mind returns to...',
+    questions: [
+      {
+        id: 'q1',
+        label: 'What consumed most of your emotional energy today?',
+        placeholder: 'A conversation, a deadline, an unspoken tension...',
+      },
+      {
+        id: 'q2',
+        label: 'What is one thing you can gently lay down before sleep?',
+        placeholder: 'An expectation, tomorrow’s anxiety, an unfinished chore...',
+      },
+      {
+        id: 'q3',
+        label: 'What was the most genuine moment you experienced?',
+        placeholder: 'When did you feel most like yourself or at peace today?',
+      },
+    ],
+  },
+  {
+    id: 'decision_clarity',
+    title: 'Decision Clarity',
+    subtitle: 'Untangle conflicting choices and discover steady ground.',
+    iconName: 'Wind',
+    color: '#8A6D79',
+    accentBg: '#F4ECEF',
+    starterPrompt: 'The situation or decision weighing on me right now is...',
+    questions: [
+      {
+        id: 'q1',
+        label: 'What is the root tension, conflict, or uncertainty?',
+        placeholder: 'Describe what feels heavy or unresolved in plain words...',
+      },
+      {
+        id: 'q2',
+        label: 'What is within your control, and what belongs to others or timing?',
+        placeholder: 'My actions and responses vs. timing, opinions, outcomes...',
+      },
+      {
+        id: 'q3',
+        label: 'What would a deeply compassionate friend whisper to you?',
+        placeholder: 'What gentle truth do you need to hear right now?',
+      },
+    ],
+  },
+  {
+    id: 'gratitude_light',
+    title: 'Gratitude & Light',
     subtitle: 'Notice the quiet details that brought warmth today.',
     iconName: 'Sparkles',
     color: '#C97C4C',
@@ -121,94 +231,39 @@ export const JOURNAL_TEMPLATES: JournalTemplate[] = [
     ],
   },
   {
-    id: 'reflection',
-    title: 'Evening Reflection & Letting Go',
-    subtitle: 'Release the day’s noise and mark what truly mattered.',
-    iconName: 'Moon',
-    color: '#806857',
-    accentBg: '#F3EFEA',
-    starterPrompt: 'As the day settles down, my mind returns to...',
+    id: 'tough_moment',
+    title: 'Tough Moment',
+    subtitle: 'Hold compassionate space for difficult feelings without rushing to fix them.',
+    iconName: 'HeartHandshake',
+    color: '#64748B',
+    accentBg: '#F1F5F9',
+    starterPrompt: 'Right now, what feels heavy or tender is...',
     questions: [
       {
         id: 'q1',
-        label: 'What consumed most of your emotional energy today?',
-        placeholder: 'A conversation, a deadline, an unspoken tension...',
+        label: 'What is hurting or feeling difficult right now?',
+        placeholder: 'Name the feeling or situation as honestly as you can...',
       },
       {
         id: 'q2',
-        label: 'What is one thing you can gently lay down before sleep?',
-        placeholder: 'An expectation, tomorrow’s anxiety, an unfinished chore...',
+        label: 'Where do you feel this tension in your body, and can you soften a little around it?',
+        placeholder: 'In my chest, shoulders, throat... taking one slow breath...',
       },
       {
         id: 'q3',
-        label: 'What was the most genuine moment you experienced?',
-        placeholder: 'When did you feel most like yourself today?',
+        label: 'What gentle kindness or permission can you give yourself today?',
+        placeholder: 'I am allowed to rest, I do not have to have this figured out right now...',
       },
     ],
-  },
-  {
-    id: 'goals',
-    title: 'Gentle Intentions',
-    subtitle: 'One meaningful step forward without rush or pressure.',
-    iconName: 'Compass',
-    color: '#4D7C5F',
-    accentBg: '#EAF3EC',
-    starterPrompt: 'Instead of an overwhelming to-do list, my intention is...',
-    questions: [
-      {
-        id: 'q1',
-        label: 'How do you hope to feel in your body & mind tomorrow?',
-        placeholder: 'Unhurried, focused, soft-spoken, curious, well-rested...',
-      },
-      {
-        id: 'q2',
-        label: 'What is the single most caring priority to attend to?',
-        placeholder: 'One concrete task or relationship that matters most...',
-      },
-      {
-        id: 'q3',
-        label: 'What boundary or pause will you protect?',
-        placeholder: 'Stepping away at 6 PM, turning off notifications, taking a walk...',
-      },
-    ],
-  },
-  {
-    id: 'clarity',
-    title: 'Untangling & Finding Clarity',
-    subtitle: 'Loosen a heavy knot in your mind and find steady ground.',
-    iconName: 'Wind',
-    color: '#8A6D79',
-    accentBg: '#F4ECEF',
-    starterPrompt: 'The situation weighing on me right now is...',
-    questions: [
-      {
-        id: 'q1',
-        label: 'What is the root tension or uncertainty?',
-        placeholder: 'Describe what feels heavy or unresolved in plain words...',
-      },
-      {
-        id: 'q2',
-        label: 'What is within your control, and what belongs to others?',
-        placeholder: 'My actions and responses vs. timing, opinions, outcomes...',
-      },
-      {
-        id: 'q3',
-        label: 'What would a deeply compassionate friend whisper to you?',
-        placeholder: 'What gentle truth do you need to hear right now?',
-      },
-    ],
-  },
-  {
-    id: 'freewrite',
-    title: 'Blank Ivory Page',
-    subtitle: 'Unfiltered, open stream of consciousness without rules.',
-    iconName: 'PenTool',
-    color: '#5C544E',
-    accentBg: '#F5F1EB',
-    starterPrompt: 'Writing freely without editing or judging my thoughts...',
-    questions: [],
   },
 ];
+
+export const getTemplateById = (id?: string | null): JournalTemplate => {
+  const norm = normalizeTemplateId(id);
+  if (norm === 'blank') return BLANK_PAGE_TEMPLATE;
+  const found = JOURNAL_TEMPLATES.find((t) => t.id === norm);
+  return found || JOURNAL_TEMPLATES[0];
+};
 
 export const SAMPLE_ENTRIES = [
   {

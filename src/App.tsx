@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   auth, 
   signInWithGoogle, 
@@ -28,7 +28,8 @@ import type {
   UserProfile, 
   WeeklyReflection,
   AIMemoryLevel,
-  ReflectionChatSession
+  ReflectionChatSession,
+  WriteEntrySource
 } from './types';
 import { SAMPLE_ENTRIES, SAMPLE_WEEKLY_REFLECTION, MOODS } from './data/templates';
 import hearthnoteLogo from './assets/images/app_logo.png';
@@ -208,9 +209,26 @@ export const App: React.FC = () => {
 
   // App Navigation
   const [currentView, setCurrentView] = useState<AppView>('home');
+  const mainContentRef = useRef<HTMLDivElement>(null);
   const [selectedTemplateForWriting, setSelectedTemplateForWriting] = useState<TemplateType>('freewrite');
+  const [writeEntrySource, setWriteEntrySource] = useState<WriteEntrySource>('direct');
   const [selectedEntryForDetail, setSelectedEntryForDetail] = useState<JournalEntry | null>(null);
   const [editingEntry, setEditingEntry] = useState<JournalEntry | null>(null);
+
+  // Write Flow Handlers
+  const handleGeneralWrite = () => {
+    setWriteEntrySource('general_write');
+    setSelectedTemplateForWriting('freewrite');
+    setEditingEntry(null);
+    setCurrentView('write');
+  };
+
+  const handleSelectTemplateForWriting = (tmplId: TemplateType) => {
+    setWriteEntrySource('template_selection');
+    setSelectedTemplateForWriting(tmplId);
+    setEditingEntry(null);
+    setCurrentView('write');
+  };
 
   // Data States
   const [entries, setEntries] = useState<JournalEntry[]>([]);
@@ -265,7 +283,7 @@ export const App: React.FC = () => {
           id: 'guest',
           displayName: 'Guest Writer',
           email: 'guest@hearthnote.app',
-          aiMemoryLevel: 'light',
+          aiMemoryLevel: (localStorage.getItem('hearthnote_memory_level') as AIMemoryLevel) || 'light',
           pinEnabled: false,
           streakCount: 3,
           lastJournalDate: todayIso,
@@ -352,7 +370,7 @@ export const App: React.FC = () => {
       id: 'guest-user',
       displayName: 'Eleanor Vance',
       email: 'eleanor@example.com',
-      aiMemoryLevel: 'light',
+      aiMemoryLevel: (localStorage.getItem('hearthnote_memory_level') as AIMemoryLevel) || 'light',
       pinEnabled: false,
       streakCount: 3,
       lastJournalDate: todayIso,
@@ -510,11 +528,24 @@ export const App: React.FC = () => {
       setSavedModalEntry(newEntry);
       setEditingEntry(null);
 
-      // 2. If AI memory != 'none', call server-side Gemini reflection
-      const memoryLevel = userProfile?.aiMemoryLevel || 'light';
-      if (memoryLevel !== 'none') {
+      // AI Reflection on save (defensive default: only if explicitly enabled: 'light' or 'deep')
+      const isAIAllowed = Boolean(
+        userProfile?.aiMemoryLevel && (userProfile.aiMemoryLevel === 'light' || userProfile.aiMemoryLevel === 'deep')
+      );
+      const memoryLevel = userProfile?.aiMemoryLevel;
+
+      if (isAIAllowed && memoryLevel) {
         setIsLoadingReflection(true);
         try {
+          const pastEntries = memoryLevel === 'deep'
+            ? entries.slice(0, 4).map((e) => ({
+                date: new Date(e.createdAt).toLocaleDateString(),
+                mood: e.mood,
+                title: e.title || e.templateTitle,
+                text: e.text.slice(0, 200),
+              }))
+            : [];
+
           const resp = await fetch('/api/gemini/reflect-entry', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -524,6 +555,7 @@ export const App: React.FC = () => {
               mood: newEntry.mood,
               promptAnswers: newEntry.promptAnswers,
               aiMemoryLevel: memoryLevel,
+              pastEntries,
             }),
           });
 
@@ -543,6 +575,9 @@ export const App: React.FC = () => {
         } finally {
           setIsLoadingReflection(false);
         }
+      } else {
+        setIsLoadingReflection(false);
+        setSavedModalReflection('');
       }
 
       setCurrentView('home');
@@ -693,11 +728,23 @@ export const App: React.FC = () => {
 
   // Settings Handlers
   const handleUpdateMemoryLevel = async (level: AIMemoryLevel) => {
-    if (userProfile && user && !isGuestMode) {
-      await saveUserProfile(user.uid, { aiMemoryLevel: level });
-    } else if (userProfile) {
-      setUserProfile({ ...userProfile, aiMemoryLevel: level });
+    try {
+      localStorage.setItem('hearthnote_memory_level', level);
+    } catch {
+      // ignore
     }
+    if (user && !isGuestMode) {
+      await saveUserProfile(user.uid, { aiMemoryLevel: level });
+    }
+    setUserProfile((prev) => prev ? { ...prev, aiMemoryLevel: level } : {
+      id: user?.uid || 'guest',
+      email: user?.email || '',
+      displayName: user?.displayName || 'Friend',
+      aiMemoryLevel: level,
+      pinEnabled: false,
+      streakCount: 0,
+      createdAt: Date.now(),
+    });
   };
 
   const handleUpdatePin = async (enabled: boolean, pin?: string) => {
@@ -751,6 +798,34 @@ export const App: React.FC = () => {
         prev.map((e) => (e.id === entryId ? { ...e, aiReflectionDismissed: true } : e))
       );
     }
+  };
+
+  const handleKeepReflection = async (entryId: string, reflectionText?: string) => {
+    const targetEntry = savedModalEntry?.id === entryId ? savedModalEntry : entries.find((e) => e.id === entryId);
+    if (!targetEntry) return;
+
+    const contentToKeep = (reflectionText || savedModalReflection || targetEntry.aiReflection || '').trim();
+    if (!contentToKeep) return;
+
+    const formattedBlock = `\n\nGentle Reflection:\n"${contentToKeep}"`;
+    // Prevent duplicate text if already preserved
+    const updatedText = targetEntry.text.includes(contentToKeep)
+      ? targetEntry.text
+      : targetEntry.text.trim() + formattedBlock;
+
+    const updatedEntry: JournalEntry = {
+      ...targetEntry,
+      text: updatedText,
+      aiReflection: contentToKeep,
+      aiReflectionDismissed: false,
+      updatedAt: Date.now(),
+    };
+
+    if (!isGuestMode && user) {
+      await saveJournalEntry(user.uid, updatedEntry);
+    }
+    setEntries((prev) => [updatedEntry, ...prev.filter((e) => e.id !== entryId)]);
+    setSavedModalEntry(updatedEntry);
   };
 
   const handleDeactivateAccount = async () => {
@@ -838,6 +913,10 @@ export const App: React.FC = () => {
         currentView={currentView}
         onNavigate={(v) => {
           setEditingEntry(null);
+          if (v === 'write') {
+            setWriteEntrySource(todayMood ? 'general_write' : 'direct');
+            setSelectedTemplateForWriting('freewrite');
+          }
           setCurrentView(v);
         }}
         user={user}
@@ -849,7 +928,7 @@ export const App: React.FC = () => {
       />
 
       {/* Main Content Area */}
-      <div className="flex-1 overflow-y-auto min-h-screen">
+      <div ref={mainContentRef} className="flex-1 overflow-y-auto min-h-screen">
         {/* Global Error Banner if any */}
         {errorMessage && (
           <div className="bg-[#FEF2F2] border-b border-[#FECACA] px-4 py-2.5 text-xs text-[#991B1B] flex items-center justify-between">
@@ -867,11 +946,8 @@ export const App: React.FC = () => {
         {currentView === 'home' && (
           <HomeScreen
             userName={user.displayName || 'Friend'}
-            onSelectTemplate={(tmplId) => {
-              setSelectedTemplateForWriting(tmplId);
-              setEditingEntry(null);
-              setCurrentView('write');
-            }}
+            onGeneralWrite={handleGeneralWrite}
+            onSelectTemplate={handleSelectTemplateForWriting}
             onSelectMood={handleSelectMood}
             todayMood={todayMood}
             recentEntries={entries}
@@ -879,6 +955,13 @@ export const App: React.FC = () => {
             onViewEntry={(entry) => setSelectedEntryForDetail(entry)}
             onViewInsights={() => setCurrentView('insights')}
             onViewHistory={() => setCurrentView('history')}
+            onViewAllEntries={() => {
+              setCurrentView('history');
+              if (mainContentRef.current) {
+                mainContentRef.current.scrollTo({ top: 0, behavior: 'instant' });
+              }
+              window.scrollTo({ top: 0, behavior: 'instant' });
+            }}
             streakCount={effectiveStreakCount}
             moodLogsLast7Days={moodLogs}
           />
@@ -889,6 +972,7 @@ export const App: React.FC = () => {
             initialTemplate={selectedTemplateForWriting}
             initialEntry={editingEntry}
             initialMood={todayMood}
+            entrySource={writeEntrySource}
             onMoodChange={handleSelectMood}
             onSave={handleSaveEntry}
             onCancel={() => {
@@ -905,6 +989,7 @@ export const App: React.FC = () => {
             entries={entries}
             onSelectEntry={(entry) => setSelectedEntryForDetail(entry)}
             onNewEntry={() => {
+              setWriteEntrySource('direct');
               setSelectedTemplateForWriting('freewrite');
               setEditingEntry(null);
               setCurrentView('write');
@@ -917,16 +1002,15 @@ export const App: React.FC = () => {
           <InsightsScreen
             entries={entries}
             moodLogs={moodLogs}
-            weeklyReflections={weeklyReflections}
-            reflectionChatSessions={reflectionChatSessions}
-            onGenerateWeeklyReflection={handleGenerateWeeklyReflection}
-            onSaveWeeklyReflection={handleSaveWeeklyReflection}
-            onDeleteWeeklyReflection={handleDeleteWeeklyReflection}
-            onSaveChatSession={handleSaveChatSession}
-            onDeleteChatSession={handleDeleteChatSession}
-            isGeneratingReflection={isGeneratingWeekly}
             streakCount={effectiveStreakCount}
+            onViewEntry={(entry) => setSelectedEntryForDetail(entry)}
             userId={user?.uid}
+            onWriteNewEntry={() => {
+              setWriteEntrySource('direct');
+              setSelectedTemplateForWriting('freewrite');
+              setEditingEntry(null);
+              setCurrentView('write');
+            }}
           />
         )}
 
@@ -964,12 +1048,14 @@ export const App: React.FC = () => {
         onClose={() => setSelectedEntryForDetail(null)}
         onEdit={(entry) => {
           setEditingEntry(entry);
+          setWriteEntrySource('direct');
           setSelectedTemplateForWriting(entry.templateType);
           setSelectedEntryForDetail(null);
           setCurrentView('write');
         }}
         onDelete={handleDeleteEntry}
         onDismissReflection={handleDismissReflection}
+        onKeepReflection={handleKeepReflection}
       />
 
       {/* Entry Saved Modal ("Your thoughts are safely kept") */}
@@ -978,16 +1064,16 @@ export const App: React.FC = () => {
         entry={savedModalEntry}
         reflectionText={savedModalReflection}
         isLoadingReflection={isLoadingReflection}
+        aiMemoryLevel={userProfile?.aiMemoryLevel || 'light'}
         onDismissReflection={() => {
           if (savedModalEntry) {
             handleDismissReflection(savedModalEntry.id);
           }
-          setSavedModalEntry(null);
-          setSavedModalReflection('');
         }}
-        onKeepReflection={() => {
-          setSavedModalEntry(null);
-          setSavedModalReflection('');
+        onKeepReflection={(textToKeep) => {
+          if (savedModalEntry) {
+            handleKeepReflection(savedModalEntry.id, textToKeep);
+          }
         }}
         onViewHistory={() => {
           setSavedModalEntry(null);

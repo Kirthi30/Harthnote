@@ -1,6 +1,6 @@
 {
   "name": "Hearthnote — Warm Personal Journal",
   "description": "A private, warm, notebook-style personal journaling web app with gentle template reflections, mood tracking, and weekly AI mirrors.",
-  "requestFramePermissions": [],
+  "requestFramePermissions": ["microphone"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
